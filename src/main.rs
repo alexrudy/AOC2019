@@ -10,6 +10,7 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io;
 
+mod cartesian;
 mod puzzles;
 
 type Error = anyhow::Error;
@@ -20,6 +21,7 @@ lazy_static! {
         let mut s: HashMap<u32, Actor> = HashMap::new();
         s.insert(1, Box::new(puzzles::day1::main));
         s.insert(2, Box::new(puzzles::day2::main));
+        s.insert(3, Box::new(puzzles::day3::main));
         s
     };
 }
