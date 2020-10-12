@@ -1,6 +1,5 @@
+use anyhow::Error;
 use std::io::{BufRead, BufReader, Read};
-
-type Error = Box<dyn ::std::error::Error + Sync + Send + 'static>;
 
 fn fuel(module: u32) -> u32 {
     (module / 3).saturating_sub(2)

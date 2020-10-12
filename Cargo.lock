@@ -10,10 +10,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "anyhow"
+version = "1.0.33"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a1fd36ffbb1fb7c834eac128ea8d0e310c5aeb635548f9d58861e1308d46e71c"
+
+[[package]]
 name = "aoc2019"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "clap",
+ "intcode",
  "lazy_static",
  "thiserror",
 ]
@@ -57,6 +65,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5aca5565f760fb5b220e499d72710ed156fdb74e631659e99377d9ebfbd13ae8"
 dependencies = [
  "libc",
+]
+
+[[package]]
+name = "intcode"
+version = "0.1.0"
+dependencies = [
+ "thiserror",
 ]
 
 [[package]]

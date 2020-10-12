@@ -2,6 +2,7 @@
 
 use clap::{value_t, App, Arg};
 
+use anyhow;
 use lazy_static::lazy_static;
 use thiserror::Error;
 
@@ -11,13 +12,14 @@ use std::io;
 
 mod puzzles;
 
-type Error = Box<dyn ::std::error::Error + Sync + Send + 'static>;
+type Error = anyhow::Error;
 type Actor = Box<dyn (Fn(Box<dyn std::io::Read>) -> Result<(), Error>) + Send + Sync + 'static>;
 
 lazy_static! {
     static ref SOLVERS: HashMap<u32, Actor> = {
         let mut s: HashMap<u32, Actor> = HashMap::new();
         s.insert(1, Box::new(puzzles::day1::main));
+        s.insert(2, Box::new(puzzles::day2::main));
         s
     };
 }
