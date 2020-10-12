@@ -1,5 +1,5 @@
+use anyhow::Error;
 use std::io::Read;
-type Error = Box<dyn ::std::error::Error + Sync + Send + 'static>;
 
 pub(crate) fn main(input: Box<dyn Read + 'static>) -> ::std::result::Result<(), Error> {
     println!("Hello!");
