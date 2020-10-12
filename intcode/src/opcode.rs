@@ -8,6 +8,10 @@ pub(crate) enum Op {
     Mul,
     Input,
     Output,
+    JumpIfTrue,
+    JumpIfFalse,
+    LessThan,
+    EqualTo,
     Halt,
 }
 
@@ -18,6 +22,10 @@ impl Op {
             2 => Ok(Op::Mul),
             3 => Ok(Op::Input),
             4 => Ok(Op::Output),
+            5 => Ok(Op::JumpIfTrue),
+            6 => Ok(Op::JumpIfFalse),
+            7 => Ok(Op::LessThan),
+            8 => Ok(Op::EqualTo),
             99 => Ok(Op::Halt),
             _ => Err(IntcodeError::UnknownOpcode(code)),
         }
@@ -52,6 +60,10 @@ impl OpCode {
             Op::Mul => 4,
             Op::Input => 2,
             Op::Output => 2,
+            Op::JumpIfTrue => 3,
+            Op::JumpIfFalse => 3,
+            Op::LessThan => 4,
+            Op::EqualTo => 4,
             Op::Halt => 1,
         }
     }

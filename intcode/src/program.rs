@@ -20,6 +20,7 @@ impl FromStr for Program {
         for line in s.lines() {
             let elements = line
                 .trim()
+                .trim_end_matches(',')
                 .split(",")
                 .map(|element| element.trim())
                 .map(|element| element.parse::<i32>())

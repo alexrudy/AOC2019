@@ -131,6 +131,10 @@ impl Computer {
             Op::Mul => self.mul(opcode),
             Op::Input => self.input(opcode),
             Op::Output => self.output(opcode),
+            Op::JumpIfTrue => self.jump_if_true(opcode),
+            Op::JumpIfFalse => self.jump_if_false(opcode),
+            Op::LessThan => self.less_than(opcode),
+            Op::EqualTo => self.equal_to(opcode),
             Op::Halt => Ok(OpCodeResult::Halt),
         };
 
@@ -193,6 +197,40 @@ impl Computer {
     fn output(&mut self, opcode: OpCode) -> Result<OpCodeResult> {
         let value = self.load(opcode, 1)?;
         self.outputs.push_back(value);
+        Ok(OpCodeResult::Advance(opcode.n_arguments() as i32))
+    }
+
+    fn jump_if_true(&mut self, opcode: OpCode) -> Result<OpCodeResult> {
+        let value: i32 = self.load(opcode, 1)?;
+        if value != 0 {
+            let target = self.load(opcode, 2)?;
+            return Ok(OpCodeResult::Jump(target));
+        }
+        Ok(OpCodeResult::Advance(opcode.n_arguments() as i32))
+    }
+
+    fn jump_if_false(&mut self, opcode: OpCode) -> Result<OpCodeResult> {
+        let value: i32 = self.load(opcode, 1)?;
+        if value == 0 {
+            let target = self.load(opcode, 2)?;
+            return Ok(OpCodeResult::Jump(target));
+        }
+        Ok(OpCodeResult::Advance(opcode.n_arguments() as i32))
+    }
+
+    fn less_than(&mut self, opcode: OpCode) -> Result<OpCodeResult> {
+        let left = self.load(opcode, 1)?;
+        let right = self.load(opcode, 2)?;
+        self.save(opcode, 3, (left < right) as i32)?;
+
+        Ok(OpCodeResult::Advance(opcode.n_arguments() as i32))
+    }
+
+    fn equal_to(&mut self, opcode: OpCode) -> Result<OpCodeResult> {
+        let left = self.load(opcode, 1)?;
+        let right = self.load(opcode, 2)?;
+        self.save(opcode, 3, (left == right) as i32)?;
+
         Ok(OpCodeResult::Advance(opcode.n_arguments() as i32))
     }
 }
