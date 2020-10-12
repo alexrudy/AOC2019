@@ -23,6 +23,7 @@ lazy_static! {
         s.insert(2, Box::new(puzzles::day2::main));
         s.insert(3, Box::new(puzzles::day3::main));
         s.insert(4, Box::new(puzzles::day4::main));
+        s.insert(5, Box::new(puzzles::day5::main));
         s
     };
 }
