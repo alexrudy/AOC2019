@@ -13,5 +13,6 @@ thiserror = "*"
 intcode = { path = "intcode" }
 anyhow = "*"
 permutohedron = "0.2.4"
+paste = "*"
 
 [workspace]

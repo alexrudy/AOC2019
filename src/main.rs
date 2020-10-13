@@ -4,6 +4,7 @@ use clap::{value_t, App, Arg};
 
 use anyhow;
 use lazy_static::lazy_static;
+use paste::paste;
 use thiserror::Error;
 
 use std::collections::HashMap;
@@ -16,17 +17,33 @@ mod puzzles;
 type Error = anyhow::Error;
 type Actor = Box<dyn (Fn(Box<dyn std::io::Read>) -> Result<(), Error>) + Send + Sync + 'static>;
 
+macro_rules! day {
+    ($day:tt) => {
+        paste! {
+            ($day, Box::new(puzzles::[<day $day>]::main))
+        }
+    };
+}
+
 lazy_static! {
     static ref SOLVERS: HashMap<u32, Actor> = {
         let mut s: HashMap<u32, Actor> = HashMap::new();
-        s.insert(1, Box::new(puzzles::day1::main));
-        s.insert(2, Box::new(puzzles::day2::main));
-        s.insert(3, Box::new(puzzles::day3::main));
-        s.insert(4, Box::new(puzzles::day4::main));
-        s.insert(5, Box::new(puzzles::day5::main));
-        s.insert(6, Box::new(puzzles::day6::main));
-        s.insert(7, Box::new(puzzles::day7::main));
-        s.insert(9, Box::new(puzzles::day9::main));
+        let days: Vec<(u32, Actor)> = vec![
+            day!(1),
+            day!(2),
+            day!(3),
+            day!(4),
+            day!(5),
+            day!(6),
+            day!(7),
+            day!(8),
+            day!(9),
+        ];
+
+        for (d, func) in days.into_iter() {
+            s.insert(d, func);
+        }
+
         s
     };
 }
