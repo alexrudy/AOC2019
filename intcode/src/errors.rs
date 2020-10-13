@@ -6,8 +6,10 @@ use crate::opcode::{OpCode, ParameterMode};
 pub enum IntcodeError {
     #[error("Invalid program counter position: {0}")]
     InvalidPosition(i32),
+
     #[error("Unknown opcode: {0}")]
     UnknownOpcode(i32),
+
     #[error("Invalid Parameter Mode for opcode: {0}, parameter: {1}")]
     InvalidParameterMode(i32, u32),
 
@@ -17,8 +19,8 @@ pub enum IntcodeError {
     #[error("Missing Parameters for offset {0} at position {1}")]
     MissingParameters(i32, i32),
 
-    #[error("Uninitialized Memory at {0}")]
-    UninitializedMemory(i32),
+    #[error("Invalid address {0}")]
+    InvalidAddress(i32),
 
     #[error("No input avaialbe")]
     NoInput,

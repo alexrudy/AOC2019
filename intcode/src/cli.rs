@@ -52,7 +52,7 @@ fn main() -> Result<()> {
         }
     }
 
-    while let ProgramState::Continue(_) = cpu.op()? {
+    while let ProgramState::Continue = cpu.op()? {
         if let Some(output) = cpu.read() {
             println!("{}", output);
         }

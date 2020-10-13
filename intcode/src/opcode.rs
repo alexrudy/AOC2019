@@ -1,6 +1,14 @@
 // Implement Opcodes for Intcode
 
 use crate::errors::{IntcodeError, Result};
+use crate::Computer;
+
+#[derive(Debug)]
+pub(crate) enum OpCodeResult {
+    Advance(i32),
+    Jump(i32),
+    Halt,
+}
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub(crate) enum Op {
@@ -66,6 +74,83 @@ impl OpCode {
             Op::EqualTo => 4,
             Op::Halt => 1,
         }
+    }
+
+    pub(crate) fn operate(&self, cpu: &mut Computer) -> Result<OpCodeResult> {
+        match self.op() {
+            Op::Add => self.add(cpu),
+            Op::Mul => self.mul(cpu),
+            Op::Input => self.input(cpu),
+            Op::Output => self.output(cpu),
+            Op::JumpIfTrue => self.jump_if_true(cpu),
+            Op::JumpIfFalse => self.jump_if_false(cpu),
+            Op::LessThan => self.less_than(cpu),
+            Op::EqualTo => self.equal_to(cpu),
+            Op::Halt => Ok(OpCodeResult::Halt),
+        }
+    }
+
+    fn add(&self, cpu: &mut Computer) -> Result<OpCodeResult> {
+        let left = cpu.load(self, 1)?;
+        let right = cpu.load(self, 2)?;
+        cpu.save(self, 3, left + right)?;
+
+        Ok(OpCodeResult::Advance(4))
+    }
+
+    fn mul(&self, cpu: &mut Computer) -> Result<OpCodeResult> {
+        let left = cpu.load(self, 1)?;
+        let right = cpu.load(self, 2)?;
+        cpu.save(self, 3, left * right)?;
+
+        Ok(OpCodeResult::Advance(self.n_arguments() as i32))
+    }
+
+    fn input(&self, cpu: &mut Computer) -> Result<OpCodeResult> {
+        let value = cpu.inputs.pop_front().ok_or(IntcodeError::NoInput)?;
+        cpu.save(self, 1, value)?;
+
+        Ok(OpCodeResult::Advance(2))
+    }
+
+    fn output(&self, cpu: &mut Computer) -> Result<OpCodeResult> {
+        let value = cpu.load(self, 1)?;
+        cpu.outputs.push_back(value);
+        Ok(OpCodeResult::Advance(self.n_arguments() as i32))
+    }
+
+    fn jump_if_true(&self, cpu: &mut Computer) -> Result<OpCodeResult> {
+        let value: i32 = cpu.load(self, 1)?;
+        if value != 0 {
+            let target = cpu.load(self, 2)?;
+            return Ok(OpCodeResult::Jump(target));
+        }
+        Ok(OpCodeResult::Advance(self.n_arguments() as i32))
+    }
+
+    fn jump_if_false(&self, cpu: &mut Computer) -> Result<OpCodeResult> {
+        let value: i32 = cpu.load(self, 1)?;
+        if value == 0 {
+            let target = cpu.load(self, 2)?;
+            return Ok(OpCodeResult::Jump(target));
+        }
+        Ok(OpCodeResult::Advance(self.n_arguments() as i32))
+    }
+
+    fn less_than(&self, cpu: &mut Computer) -> Result<OpCodeResult> {
+        let left = cpu.load(self, 1)?;
+        let right = cpu.load(self, 2)?;
+        cpu.save(self, 3, (left < right) as i32)?;
+
+        Ok(OpCodeResult::Advance(self.n_arguments() as i32))
+    }
+
+    fn equal_to(&self, cpu: &mut Computer) -> Result<OpCodeResult> {
+        let left = cpu.load(self, 1)?;
+        let right = cpu.load(self, 2)?;
+        cpu.save(self, 3, (left == right) as i32)?;
+
+        Ok(OpCodeResult::Advance(self.n_arguments() as i32))
     }
 
     #[cfg(test)]

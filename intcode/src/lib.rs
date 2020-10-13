@@ -7,19 +7,13 @@ mod program;
 
 pub use crate::errors::{IntcodeError, Result};
 pub use crate::opcode::OpCode;
-use crate::opcode::{Op, ParameterMode};
+use crate::opcode::{OpCodeResult, ParameterMode};
 pub use crate::program::Program;
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum ProgramState {
-    Continue(i32), // Contains current program counter
-    Halt,
-}
-
-#[derive(Debug)]
-enum OpCodeResult {
-    Advance(i32),
-    Jump(i32),
+    Continue,
+    Input,
     Halt,
 }
 
@@ -53,10 +47,11 @@ impl Memory {
     }
 
     fn argument(&self, address: i32) -> Result<i32> {
-        self.registers
-            .get(&(address))
-            .ok_or(IntcodeError::UninitializedMemory(address))
-            .map(|v| *v)
+        if address < 0 {
+            return Err(IntcodeError::InvalidAddress(address));
+        }
+
+        Ok(self.registers.get(&(address)).map(|v| *v).unwrap_or(0))
     }
 
     fn load(&mut self, address: i32, mode: ParameterMode) -> Result<i32> {
@@ -66,14 +61,19 @@ impl Memory {
             return Ok(target);
         }
 
-        self.registers
-            .get(&target)
-            .ok_or(IntcodeError::UninitializedMemory(target))
-            .map(|v| *v)
+        if target < 0 {
+            return Err(IntcodeError::InvalidAddress(target));
+        }
+
+        Ok(self.registers.get(&target).map(|v| *v).unwrap_or(0))
     }
 
     fn save(&mut self, address: i32, value: i32) -> Result<()> {
         let target = self.argument(address)?;
+        if target < 0 {
+            return Err(IntcodeError::InvalidAddress(target));
+        }
+
         self.registers.insert(target, value);
         Ok(())
     }
@@ -97,10 +97,11 @@ impl Computer {
         }
     }
 
-    pub fn run(&mut self) -> Result<()> {
-        while let Ok(ProgramState::Continue(_)) = self.op() {}
+    pub fn run(&mut self) -> Result<ProgramState> {
+        while let Ok(ProgramState::Continue) = self.op() {}
 
-        Ok(())
+        // Return the last opcode result
+        self.op()
     }
 
     pub fn get(&self, position: i32) -> Option<i32> {
@@ -126,112 +127,40 @@ impl Computer {
     pub fn op(&mut self) -> Result<ProgramState> {
         let opcode = OpCode::new(self.memory.argument(self.pc)?)?;
 
-        let result = match opcode.op() {
-            Op::Add => self.add(opcode),
-            Op::Mul => self.mul(opcode),
-            Op::Input => self.input(opcode),
-            Op::Output => self.output(opcode),
-            Op::JumpIfTrue => self.jump_if_true(opcode),
-            Op::JumpIfFalse => self.jump_if_false(opcode),
-            Op::LessThan => self.less_than(opcode),
-            Op::EqualTo => self.equal_to(opcode),
-            Op::Halt => Ok(OpCodeResult::Halt),
-        };
+        let result = opcode.operate(self);
 
         match result {
             Ok(OpCodeResult::Advance(n)) => {
                 self.pc += n;
-                Ok(ProgramState::Continue(self.pc))
+                Ok(ProgramState::Continue)
             }
             Ok(OpCodeResult::Jump(t)) => {
                 self.pc = t;
-                Ok(ProgramState::Continue(self.pc))
+                Ok(ProgramState::Continue)
             }
             Ok(OpCodeResult::Halt) => Ok(ProgramState::Halt),
+            Err(IntcodeError::NoInput) => Ok(ProgramState::Input),
             Err(e) => Err(e),
         }
     }
 
-    fn load(&mut self, opcode: OpCode, parameter: u32) -> Result<i32> {
+    fn load(&mut self, opcode: &OpCode, parameter: u32) -> Result<i32> {
         self.memory
             .load(self.pc + (parameter as i32), opcode.mode(parameter)?)
     }
 
-    fn save(&mut self, opcode: OpCode, parameter: u32, value: i32) -> Result<()> {
+    fn save(&mut self, opcode: &OpCode, parameter: u32, value: i32) -> Result<()> {
         if let ParameterMode::Immediate = opcode.mode(parameter)? {
             return Err(IntcodeError::IllegalParameterMode(
                 ParameterMode::Immediate,
                 parameter,
-                opcode,
+                *opcode,
             ));
         }
 
         self.memory.save(self.pc + (parameter as i32), value)?;
 
         Ok(())
-    }
-
-    fn add(&mut self, opcode: OpCode) -> Result<OpCodeResult> {
-        let left = self.load(opcode, 1)?;
-        let right = self.load(opcode, 2)?;
-        self.save(opcode, 3, left + right)?;
-
-        Ok(OpCodeResult::Advance(4))
-    }
-
-    fn mul(&mut self, opcode: OpCode) -> Result<OpCodeResult> {
-        let left = self.load(opcode, 1)?;
-        let right = self.load(opcode, 2)?;
-        self.save(opcode, 3, left * right)?;
-
-        Ok(OpCodeResult::Advance(opcode.n_arguments() as i32))
-    }
-
-    fn input(&mut self, opcode: OpCode) -> Result<OpCodeResult> {
-        let value = self.inputs.pop_front().ok_or(IntcodeError::NoInput)?;
-        self.save(opcode, 1, value)?;
-
-        Ok(OpCodeResult::Advance(2))
-    }
-
-    fn output(&mut self, opcode: OpCode) -> Result<OpCodeResult> {
-        let value = self.load(opcode, 1)?;
-        self.outputs.push_back(value);
-        Ok(OpCodeResult::Advance(opcode.n_arguments() as i32))
-    }
-
-    fn jump_if_true(&mut self, opcode: OpCode) -> Result<OpCodeResult> {
-        let value: i32 = self.load(opcode, 1)?;
-        if value != 0 {
-            let target = self.load(opcode, 2)?;
-            return Ok(OpCodeResult::Jump(target));
-        }
-        Ok(OpCodeResult::Advance(opcode.n_arguments() as i32))
-    }
-
-    fn jump_if_false(&mut self, opcode: OpCode) -> Result<OpCodeResult> {
-        let value: i32 = self.load(opcode, 1)?;
-        if value == 0 {
-            let target = self.load(opcode, 2)?;
-            return Ok(OpCodeResult::Jump(target));
-        }
-        Ok(OpCodeResult::Advance(opcode.n_arguments() as i32))
-    }
-
-    fn less_than(&mut self, opcode: OpCode) -> Result<OpCodeResult> {
-        let left = self.load(opcode, 1)?;
-        let right = self.load(opcode, 2)?;
-        self.save(opcode, 3, (left < right) as i32)?;
-
-        Ok(OpCodeResult::Advance(opcode.n_arguments() as i32))
-    }
-
-    fn equal_to(&mut self, opcode: OpCode) -> Result<OpCodeResult> {
-        let left = self.load(opcode, 1)?;
-        let right = self.load(opcode, 2)?;
-        self.save(opcode, 3, (left == right) as i32)?;
-
-        Ok(OpCodeResult::Advance(opcode.n_arguments() as i32))
     }
 }
 
@@ -243,7 +172,7 @@ impl<'c> Iterator for Follower<'c> {
     type Item = i32;
 
     fn next(&mut self) -> Option<Self::Item> {
-        while let Ok(ProgramState::Continue(_)) = self.cpu.op() {
+        while let Ok(ProgramState::Continue) = self.cpu.op() {
             let output = self.cpu.read();
             if output.is_some() {
                 return output;
