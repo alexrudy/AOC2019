@@ -1,7 +1,7 @@
 use anyhow::Error;
 use std::io::Read;
 
-use intcode::{Computer, Program};
+use intcode::{Computer, IntMem, Program};
 
 pub(crate) fn main(input: Box<dyn Read + 'static>) -> ::std::result::Result<(), Error> {
     let program = Program::read(input)?;
@@ -13,7 +13,10 @@ pub(crate) fn main(input: Box<dyn Read + 'static>) -> ::std::result::Result<(), 
         cpu.feed(1);
 
         // Find non-zero outputs
-        let outputs = cpu.follow().skip_while(|e| *e == 0).collect::<Vec<i32>>();
+        let outputs = cpu
+            .follow()
+            .skip_while(|e| *e == 0)
+            .collect::<Vec<IntMem>>();
         if outputs.len() != 1 {
             eprintln!("Unexpected Outputs: {:?}", outputs);
         }
@@ -27,7 +30,7 @@ pub(crate) fn main(input: Box<dyn Read + 'static>) -> ::std::result::Result<(), 
         cpu.feed(5);
 
         // Find non-zero outputs
-        let outputs = cpu.follow().collect::<Vec<i32>>();
+        let outputs = cpu.follow().collect::<Vec<IntMem>>();
         if outputs.len() != 1 {
             eprintln!("Unexpected Outputs: {:?}", outputs);
         }
@@ -41,7 +44,7 @@ pub(crate) fn main(input: Box<dyn Read + 'static>) -> ::std::result::Result<(), 
 mod test {
     use super::*;
 
-    fn one_to_one(program: &str, input: i32) -> Result<i32, Error> {
+    fn one_to_one(program: &str, input: IntMem) -> Result<IntMem, Error> {
         let prog: Program = program.parse()?;
         let mut cpu = Computer::new(prog);
 

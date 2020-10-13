@@ -1,12 +1,12 @@
 // Implement Opcodes for Intcode
 
 use crate::errors::{IntcodeError, Result};
-use crate::Computer;
+use crate::{Computer, IntMem};
 
 #[derive(Debug)]
 pub(crate) enum OpCodeResult {
-    Advance(i32),
-    Jump(i32),
+    Advance(IntMem),
+    Jump(IntMem),
     Halt,
 }
 
@@ -20,11 +20,12 @@ pub(crate) enum Op {
     JumpIfFalse,
     LessThan,
     EqualTo,
+    MoveStack,
     Halt,
 }
 
 impl Op {
-    fn from_code(code: i32) -> Result<Self> {
+    fn from_code(code: IntMem) -> Result<Self> {
         match code % 100 {
             1 => Ok(Op::Add),
             2 => Ok(Op::Mul),
@@ -34,6 +35,7 @@ impl Op {
             6 => Ok(Op::JumpIfFalse),
             7 => Ok(Op::LessThan),
             8 => Ok(Op::EqualTo),
+            9 => Ok(Op::MoveStack),
             99 => Ok(Op::Halt),
             _ => Err(IntcodeError::UnknownOpcode(code)),
         }
@@ -41,10 +43,10 @@ impl Op {
 }
 
 #[derive(Debug, Copy, Clone)]
-pub struct OpCode(i32);
+pub struct OpCode(IntMem);
 
 impl OpCode {
-    pub(crate) fn new(code: i32) -> Result<Self> {
+    pub(crate) fn new(code: IntMem) -> Result<Self> {
         Op::from_code(code)?;
         Ok(OpCode(code))
     }
@@ -54,10 +56,11 @@ impl OpCode {
     }
 
     pub(crate) fn mode(&self, parameter: u32) -> Result<ParameterMode> {
-        let modulo = 10 * (10i32.pow(parameter));
+        let modulo = 10 * (10i64.pow(parameter));
         match (self.0 / modulo) % 10 {
             0 => Ok(ParameterMode::Position),
             1 => Ok(ParameterMode::Immediate),
+            2 => Ok(ParameterMode::Relative),
             _ => Err(IntcodeError::InvalidParameterMode(self.0, parameter)),
         }
     }
@@ -72,6 +75,7 @@ impl OpCode {
             Op::JumpIfFalse => 3,
             Op::LessThan => 4,
             Op::EqualTo => 4,
+            Op::MoveStack => 2,
             Op::Halt => 1,
         }
     }
@@ -86,6 +90,7 @@ impl OpCode {
             Op::JumpIfFalse => self.jump_if_false(cpu),
             Op::LessThan => self.less_than(cpu),
             Op::EqualTo => self.equal_to(cpu),
+            Op::MoveStack => self.move_stack(cpu),
             Op::Halt => Ok(OpCodeResult::Halt),
         }
     }
@@ -103,7 +108,7 @@ impl OpCode {
         let right = cpu.load(self, 2)?;
         cpu.save(self, 3, left * right)?;
 
-        Ok(OpCodeResult::Advance(self.n_arguments() as i32))
+        Ok(OpCodeResult::Advance(self.n_arguments() as IntMem))
     }
 
     fn input(&self, cpu: &mut Computer) -> Result<OpCodeResult> {
@@ -116,41 +121,47 @@ impl OpCode {
     fn output(&self, cpu: &mut Computer) -> Result<OpCodeResult> {
         let value = cpu.load(self, 1)?;
         cpu.outputs.push_back(value);
-        Ok(OpCodeResult::Advance(self.n_arguments() as i32))
+        Ok(OpCodeResult::Advance(self.n_arguments() as IntMem))
     }
 
     fn jump_if_true(&self, cpu: &mut Computer) -> Result<OpCodeResult> {
-        let value: i32 = cpu.load(self, 1)?;
+        let value: IntMem = cpu.load(self, 1)?;
         if value != 0 {
             let target = cpu.load(self, 2)?;
             return Ok(OpCodeResult::Jump(target));
         }
-        Ok(OpCodeResult::Advance(self.n_arguments() as i32))
+        Ok(OpCodeResult::Advance(self.n_arguments() as IntMem))
     }
 
     fn jump_if_false(&self, cpu: &mut Computer) -> Result<OpCodeResult> {
-        let value: i32 = cpu.load(self, 1)?;
+        let value: IntMem = cpu.load(self, 1)?;
         if value == 0 {
             let target = cpu.load(self, 2)?;
             return Ok(OpCodeResult::Jump(target));
         }
-        Ok(OpCodeResult::Advance(self.n_arguments() as i32))
+        Ok(OpCodeResult::Advance(self.n_arguments() as IntMem))
     }
 
     fn less_than(&self, cpu: &mut Computer) -> Result<OpCodeResult> {
         let left = cpu.load(self, 1)?;
         let right = cpu.load(self, 2)?;
-        cpu.save(self, 3, (left < right) as i32)?;
+        cpu.save(self, 3, (left < right) as IntMem)?;
 
-        Ok(OpCodeResult::Advance(self.n_arguments() as i32))
+        Ok(OpCodeResult::Advance(self.n_arguments() as IntMem))
     }
 
     fn equal_to(&self, cpu: &mut Computer) -> Result<OpCodeResult> {
         let left = cpu.load(self, 1)?;
         let right = cpu.load(self, 2)?;
-        cpu.save(self, 3, (left == right) as i32)?;
+        cpu.save(self, 3, (left == right) as IntMem)?;
 
-        Ok(OpCodeResult::Advance(self.n_arguments() as i32))
+        Ok(OpCodeResult::Advance(self.n_arguments() as IntMem))
+    }
+
+    fn move_stack(&self, cpu: &mut Computer) -> Result<OpCodeResult> {
+        let offset = cpu.load(self, 1)?;
+        cpu.offset(offset)?;
+        Ok(OpCodeResult::Advance(self.n_arguments() as IntMem))
     }
 
     #[cfg(test)]
@@ -169,6 +180,7 @@ impl OpCode {
 pub enum ParameterMode {
     Position,
     Immediate,
+    Relative,
 }
 
 #[cfg(test)]

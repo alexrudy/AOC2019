@@ -1,26 +1,27 @@
 use thiserror::Error;
 
-use crate::opcode::{OpCode, ParameterMode};
+use crate::opcode::ParameterMode;
+use crate::IntMem;
 
 #[derive(Error, Debug)]
 pub enum IntcodeError {
     #[error("Invalid program counter position: {0}")]
-    InvalidPosition(i32),
+    InvalidPosition(IntMem),
 
     #[error("Unknown opcode: {0}")]
-    UnknownOpcode(i32),
+    UnknownOpcode(IntMem),
 
     #[error("Invalid Parameter Mode for opcode: {0}, parameter: {1}")]
-    InvalidParameterMode(i32, u32),
+    InvalidParameterMode(IntMem, u32),
 
-    #[error("Illegal parameter mode {0:?} for argument {1} to opcode {2:?}")]
-    IllegalParameterMode(ParameterMode, u32, OpCode),
+    #[error("Illegal parameter mode {0:?}")]
+    IllegalParameterMode(ParameterMode),
 
     #[error("Missing Parameters for offset {0} at position {1}")]
-    MissingParameters(i32, i32),
+    MissingParameters(IntMem, IntMem),
 
     #[error("Invalid address {0}")]
-    InvalidAddress(i32),
+    InvalidAddress(IntMem),
 
     #[error("No input avaialbe")]
     NoInput,

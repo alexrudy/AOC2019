@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Error};
 use std::io::Read;
 
-use intcode::{Computer, Program, ProgramState};
+use intcode::{Computer, IntMem, Program, ProgramState};
 use permutohedron::Heap;
 
 #[derive(Debug)]
@@ -25,7 +25,7 @@ impl AmplifierChain {
         Self { amplifiers: amps }
     }
 
-    fn phase(&mut self, phases: &[i32]) -> Result<(), Error> {
+    fn phase(&mut self, phases: &[IntMem]) -> Result<(), Error> {
         if phases.len() != self.amplifiers.len() {
             return Err(anyhow!("Invalid number of phases"));
         }
@@ -37,7 +37,7 @@ impl AmplifierChain {
         Ok(())
     }
 
-    fn run(&mut self) -> Result<i32, Error> {
+    fn run(&mut self) -> Result<IntMem, Error> {
         let mut signal = 0;
         for amp in self.amplifiers.iter_mut() {
             amp.cpu.feed(signal);
@@ -50,7 +50,7 @@ impl AmplifierChain {
         Ok(signal)
     }
 
-    fn feedback_loop(&mut self) -> Result<i32, Error> {
+    fn feedback_loop(&mut self) -> Result<IntMem, Error> {
         let mut last_ouput = None;
         let n = self.amplifiers.len();
         let mut input = 0;
@@ -77,8 +77,8 @@ impl AmplifierChain {
     }
 }
 
-fn find_best_phase(n: usize, program: Program) -> Result<i32, Error> {
-    let mut phases: Vec<i32> = (0..(n as i32)).collect();
+fn find_best_phase(n: usize, program: Program) -> Result<IntMem, Error> {
+    let mut phases: Vec<IntMem> = (0..(n as IntMem)).collect();
 
     let signal = Heap::new(&mut phases)
         .map(|p| {
@@ -94,8 +94,8 @@ fn find_best_phase(n: usize, program: Program) -> Result<i32, Error> {
     }
 }
 
-fn find_best_phase_with_feedback(n: usize, program: Program) -> Result<i32, Error> {
-    let mut phases: Vec<i32> = (0..(n as i32)).map(|i| i + 5).collect();
+fn find_best_phase_with_feedback(n: usize, program: Program) -> Result<IntMem, Error> {
+    let mut phases: Vec<IntMem> = (0..(n as IntMem)).map(|i| i + 5).collect();
 
     let signal = Heap::new(&mut phases)
         .map(|p| {

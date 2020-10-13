@@ -1,5 +1,5 @@
 use anyhow::Error;
-use intcode::Computer;
+use intcode::{Computer, IntMem};
 use std::io::{BufRead, BufReader, Read};
 
 pub(crate) fn main(input: Box<dyn Read + 'static>) -> ::std::result::Result<(), Error> {
@@ -10,8 +10,8 @@ pub(crate) fn main(input: Box<dyn Read + 'static>) -> ::std::result::Result<(), 
         for line in reader.lines() {
             let elements = line?
                 .split(",")
-                .map(|element| element.parse::<i32>())
-                .collect::<Result<Vec<i32>, std::num::ParseIntError>>()?;
+                .map(|element| element.parse::<IntMem>())
+                .collect::<Result<Vec<IntMem>, std::num::ParseIntError>>()?;
             v.extend(elements)
         }
         v
@@ -40,7 +40,7 @@ pub(crate) fn main(input: Box<dyn Read + 'static>) -> ::std::result::Result<(), 
     Ok(())
 }
 
-fn trial(program: &Vec<i32>, noun: i32, verb: i32) -> Option<i32> {
+fn trial(program: &Vec<IntMem>, noun: IntMem, verb: IntMem) -> Option<IntMem> {
     let mut part2 = program.clone();
     part2[1] = noun;
     part2[2] = verb;
@@ -66,7 +66,7 @@ mod test {
         assert_eq!(cpu.get(3), Some(70))
     }
 
-    fn transform(program: Vec<i32>) -> Result<Vec<i32>, IntcodeError> {
+    fn transform(program: Vec<IntMem>) -> Result<Vec<IntMem>, IntcodeError> {
         let mut cpu = Computer::new(program);
         cpu.run()?;
 
