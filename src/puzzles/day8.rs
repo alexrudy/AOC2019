@@ -138,6 +138,6 @@ mod test {
     fn examples_part2() {
         let image = Image::read((2, 2), Box::new("0222112222120000".as_bytes())).unwrap();
 
-        assert_eq!(format!("{}", image.render()), "01\n10\n");
+        assert_eq!(format!("{}", image.render()), " #\n# \n");
     }
 }
