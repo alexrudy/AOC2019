@@ -13,8 +13,26 @@ impl Display for Point {
 }
 
 impl Point {
-    pub fn manhattan(self, other: &Point) -> i32 {
+    pub fn new(x: i32, y: i32) -> Point {
+        Point { x: x, y: y }
+    }
+
+    pub fn manhattan(&self, other: &Point) -> i32 {
         i32::abs(self.x - other.x) + i32::abs(self.y - other.y)
+    }
+
+    pub fn offset(&self, other: &Point) -> Point {
+        Point {
+            x: self.x - other.x,
+            y: self.y - other.y,
+        }
+    }
+
+}
+
+impl From<(usize, usize)> for Point {
+    fn from(coordinates: (usize, usize)) -> Self {
+        Self { x: coordinates.0 as i32, y: coordinates.1 as i32}
     }
 }
 
