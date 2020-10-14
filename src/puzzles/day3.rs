@@ -4,7 +4,7 @@ use std::io::{BufRead, BufReader, Read};
 use std::str::FromStr;
 use thiserror::Error;
 
-use crate::cartesian::{Direction, Point};
+use geometry::{Direction, Point};
 
 #[derive(Error, Debug)]
 pub(crate) enum WirePathParsingError {
@@ -41,8 +41,8 @@ impl FromStr for WirePathElement {
                 .nth(0)
                 .ok_or(WirePathParsingError::MalformedPath(element.to_owned()))?;
             match d {
-                'U' => Ok(Direction::Up),
-                'D' => Ok(Direction::Down),
+                'U' => Ok(Direction::Down),
+                'D' => Ok(Direction::Up),
                 'L' => Ok(Direction::Left),
                 'R' => Ok(Direction::Right),
                 _ => Err(WirePathParsingError::InvalidDirection(d.to_string())),
@@ -118,7 +118,7 @@ impl<'a> Iterator for WirePathIterator<'a> {
             let step = &self.path.0[self.step];
             if self.distance < step.distance {
                 self.distance += 1;
-                let next_position = self.position.map(|p| p.step(&step.direction));
+                let next_position = self.position.map(|p| p.step(step.direction));
                 std::mem::replace(&mut self.position, next_position)
             } else {
                 unreachable!("Exceeded step!")
@@ -173,13 +173,13 @@ pub(crate) fn main(input: Box<dyn Read + 'static>) -> ::std::result::Result<(), 
     let closest_collision = breadboard
         .collisions()
         .into_iter()
-        .min_by_key(|&point| point.manhattan(&Point::origin()))
+        .min_by_key(|&point| point.manhattan_distance(Point::origin()))
         .ok_or(anyhow!("No collisions found!"))?;
 
     println!(
         "Part 1: Closest Collision is at {}, distance = {}",
         closest_collision,
-        closest_collision.manhattan(&Point::origin())
+        closest_collision.manhattan_distance(Point::origin())
     );
 
     let (point, delay) = breadboard
@@ -206,11 +206,11 @@ mod test {
             WirePath(vec![
                 WirePathElement {
                     distance: 4,
-                    direction: Direction::Up
+                    direction: Direction::Down
                 },
                 WirePathElement {
                     distance: 3,
-                    direction: Direction::Down
+                    direction: Direction::Up
                 }
             ])
         )
@@ -274,9 +274,9 @@ mod test {
         breadboard
             .collisions()
             .into_iter()
-            .min_by_key(|&point| point.manhattan(&Point::origin()))
+            .min_by_key(|&point| point.manhattan_distance(Point::origin()))
             .expect("No collisions found!")
-            .manhattan(&Point::origin())
+            .manhattan_distance(Point::origin())
     }
 
     fn example_case_part2(input: &str) -> i32 {

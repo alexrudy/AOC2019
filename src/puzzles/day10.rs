@@ -1,4 +1,4 @@
-use crate::cartesian::Point;
+use geometry::Point;
 use anyhow::{anyhow, Error};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::convert::TryInto;
@@ -165,7 +165,7 @@ impl Observatory {
         }
     }
     fn add(&mut self, target: Point) -> () {
-        let angle: Angle = target.offset(&self.location).into();
+        let angle: Angle = target.offset(self.location).into();
         self.sightlines.entry(angle).or_insert(Vec::new()).push(target);
     }
 
@@ -193,7 +193,7 @@ impl<'o> LaserCannon<'o> {
 
         let mut targets_by_angle: Vec<VecDeque<Point>> = angles.iter().map(|a| {
             let mut targets = obs.sightlines.get(a).unwrap().clone();
-            targets.sort_by_key(|target| target.manhattan(&obs.location));
+            targets.sort_by_key(|target| target.manhattan_distance(obs.location));
             targets.into()
         }).collect();
 

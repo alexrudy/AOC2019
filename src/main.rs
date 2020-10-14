@@ -11,7 +11,6 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io;
 
-mod cartesian;
 mod puzzles;
 
 type Error = anyhow::Error;
@@ -39,6 +38,7 @@ lazy_static! {
             day!(8),
             day!(9),
             day!(10),
+            day!(11),
         ];
 
         for (d, func) in days.into_iter() {

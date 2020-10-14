@@ -11,6 +11,7 @@ clap = "2.33"
 lazy_static = "*"
 thiserror = "*"
 intcode = { path = "intcode" }
+geometry = { path = "geometry" }
 anyhow = "*"
 permutohedron = "0.2.4"
 paste = "*"
