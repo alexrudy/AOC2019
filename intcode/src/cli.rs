@@ -1,6 +1,7 @@
-use anyhow::Error;
+use anyhow::{anyhow, Error};
 use clap::{App, Arg};
-use intcode::{Computer, Program, ProgramState};
+use intcode::{CPUState, Computer, IntMem, Program};
+use std::collections::VecDeque;
 use std::fs::File;
 
 type Result<T> = std::result::Result<T, Error>;
@@ -46,15 +47,29 @@ fn main() -> Result<()> {
 
     let mut cpu = Computer::new(prog);
 
-    if let Some(values) = matches.values_of("input") {
-        for ivalue in values {
-            cpu.feed(ivalue.parse()?);
-        }
-    }
+    let mut inputs = matches
+        .values_of("input")
+        .map(|v| {
+            v.map(|i| i.parse::<IntMem>())
+                .collect::<std::result::Result<VecDeque<IntMem>, std::num::ParseIntError>>()
+        })
+        .transpose()?;
 
-    while let ProgramState::Continue = cpu.op()? {
-        if let Some(output) = cpu.read() {
-            println!("{}", output);
+    loop {
+        match cpu.op()? {
+            CPUState::Continue => {}
+            CPUState::Output(v) => println!("{}", v),
+            CPUState::Halt => break,
+            CPUState::Input => match inputs {
+                Some(ref mut buffer) => {
+                    cpu.feed(
+                        buffer
+                            .pop_front()
+                            .ok_or(anyhow!("Another input value is required!"))?,
+                    )?;
+                }
+                None => return Err(anyhow!("An input value is required!")),
+            },
         }
     }
 

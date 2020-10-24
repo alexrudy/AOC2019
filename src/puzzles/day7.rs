@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Error};
 use std::io::Read;
 
-use intcode::{Computer, IntMem, Program, ProgramState};
+use intcode::{CPUState, Computer, IntMem, Program};
 use permutohedron::Heap;
 
 #[derive(Debug)]
@@ -31,7 +31,7 @@ impl AmplifierChain {
         }
 
         for (amp, &phase) in self.amplifiers.iter_mut().zip(phases.iter()) {
-            amp.cpu.feed(phase);
+            amp.cpu.feed(phase)?;
         }
 
         Ok(())
@@ -40,12 +40,17 @@ impl AmplifierChain {
     fn run(&mut self) -> Result<IntMem, Error> {
         let mut signal = 0;
         for amp in self.amplifiers.iter_mut() {
-            amp.cpu.feed(signal);
-            signal = amp
-                .cpu
-                .follow()
-                .nth(0)
-                .ok_or(anyhow!("Amplifier returned no output!"))?;
+            loop {
+                match amp.cpu.op()? {
+                    CPUState::Input => amp.cpu.feed(signal)?,
+                    CPUState::Continue => {}
+                    CPUState::Output(v) => {
+                        signal = v;
+                        break;
+                    }
+                    CPUState::Halt => return Err(anyhow!("Expected output from CPU!")),
+                }
+            }
         }
         Ok(signal)
     }
@@ -56,19 +61,27 @@ impl AmplifierChain {
         let mut input = 0;
         loop {
             for (i, amp) in self.amplifiers.iter_mut().enumerate() {
-                amp.cpu.feed(input);
-                amp.cpu.run()?;
-                if let Some(output) = amp.cpu.read() {
-                    input = output;
-                    if i == n - 1 {
-                        last_ouput = Some(output);
+                loop {
+                    match amp.cpu.op()? {
+                        CPUState::Output(value) => {
+                            input = value;
+                            if i == n - 1 {
+                                last_ouput = Some(value);
+                            }
+                            break;
+                        }
+                        CPUState::Halt => break,
+                        CPUState::Continue => {}
+                        CPUState::Input => {
+                            amp.cpu.feed(input)?;
+                        }
                     }
                 }
             }
             if self
                 .amplifiers
                 .iter_mut()
-                .all(|amp| amp.cpu.run().unwrap() == ProgramState::Halt)
+                .all(|amp| amp.cpu.run().unwrap() == CPUState::Halt)
             {
                 break;
             }

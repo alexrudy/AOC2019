@@ -4,8 +4,15 @@ use crate::errors::{IntcodeError, Result};
 use crate::{Computer, IntMem};
 
 #[derive(Debug)]
+pub(crate) struct OpCodeOutputInfo {
+    pub(crate) output: IntMem,
+    pub(crate) advance: IntMem,
+}
+
+#[derive(Debug)]
 pub(crate) enum OpCodeResult {
     Advance(IntMem),
+    Output(OpCodeOutputInfo),
     Jump(IntMem),
     Halt,
 }
@@ -100,7 +107,7 @@ impl OpCode {
         let right = cpu.load(self, 2)?;
         cpu.save(self, 3, left + right)?;
 
-        Ok(OpCodeResult::Advance(4))
+        Ok(OpCodeResult::Advance(self.n_arguments() as IntMem))
     }
 
     fn mul(&self, cpu: &mut Computer) -> Result<OpCodeResult> {
@@ -112,16 +119,19 @@ impl OpCode {
     }
 
     fn input(&self, cpu: &mut Computer) -> Result<OpCodeResult> {
-        let value = cpu.inputs.pop_front().ok_or(IntcodeError::NoInput)?;
+        let value = cpu.input.take().ok_or(IntcodeError::NoInput)?;
         cpu.save(self, 1, value)?;
 
-        Ok(OpCodeResult::Advance(2))
+        Ok(OpCodeResult::Advance(self.n_arguments() as IntMem))
     }
 
     fn output(&self, cpu: &mut Computer) -> Result<OpCodeResult> {
         let value = cpu.load(self, 1)?;
-        cpu.outputs.push_back(value);
-        Ok(OpCodeResult::Advance(self.n_arguments() as IntMem))
+
+        Ok(OpCodeResult::Output(OpCodeOutputInfo {
+            advance: self.n_arguments() as IntMem,
+            output: value,
+        }))
     }
 
     fn jump_if_true(&self, cpu: &mut Computer) -> Result<OpCodeResult> {

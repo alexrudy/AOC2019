@@ -10,7 +10,7 @@ pub(crate) fn main(input: Box<dyn Read + 'static>) -> ::std::result::Result<(), 
         let mut cpu = Computer::new(program.clone());
 
         // Set to test mode
-        cpu.feed(1);
+        cpu.feed(1)?;
 
         // Find non-zero outputs
         let outputs = cpu
@@ -27,7 +27,7 @@ pub(crate) fn main(input: Box<dyn Read + 'static>) -> ::std::result::Result<(), 
         let mut cpu = Computer::new(program.clone());
 
         // Set to boost mode
-        cpu.feed(2);
+        cpu.feed(2)?;
 
         // Find non-zero outputs
         let outputs = cpu.follow().collect::<Vec<IntMem>>();

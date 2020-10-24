@@ -10,12 +10,13 @@ pub(crate) fn main(input: Box<dyn Read + 'static>) -> ::std::result::Result<(), 
         let mut cpu = Computer::new(program.clone());
 
         // Set to air conditioner ID
-        cpu.feed(1);
+        cpu.feed(5)?;
 
         // Find non-zero outputs
         let outputs = cpu
             .follow()
             .skip_while(|e| *e == 0)
+            .take(2)
             .collect::<Vec<IntMem>>();
         if outputs.len() != 1 {
             eprintln!("Unexpected Outputs: {:?}", outputs);
@@ -27,14 +28,8 @@ pub(crate) fn main(input: Box<dyn Read + 'static>) -> ::std::result::Result<(), 
         let mut cpu = Computer::new(program.clone());
 
         // Set to air conditioner ID
-        cpu.feed(5);
-
-        // Find non-zero outputs
-        let outputs = cpu.follow().collect::<Vec<IntMem>>();
-        if outputs.len() != 1 {
-            eprintln!("Unexpected Outputs: {:?}", outputs);
-        }
-        println!("Part 2: Diagonstic Code = {}", outputs[0]);
+        let code = cpu.simple(5)?;
+        println!("Part 2: Diagonstic Code = {}", code);
     }
 
     Ok(())
@@ -47,9 +42,7 @@ mod test {
     fn one_to_one(program: &str, input: IntMem) -> Result<IntMem, Error> {
         let prog: Program = program.parse()?;
         let mut cpu = Computer::new(prog);
-
-        cpu.feed(input);
-        Ok(cpu.follow().next().unwrap())
+        Ok(cpu.simple(input)?)
     }
 
     #[test]

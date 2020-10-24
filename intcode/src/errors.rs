@@ -25,6 +25,15 @@ pub enum IntcodeError {
 
     #[error("No input avaialbe")]
     NoInput,
+
+    #[error("Input is already present")]
+    InputAlreadyPresent,
+
+    #[error("No output avaialbe")]
+    NoOutput,
+
+    #[error("Unexpected output")]
+    UnexpectedOutput,
 }
 
 pub type Result<T> = ::std::result::Result<T, IntcodeError>;
