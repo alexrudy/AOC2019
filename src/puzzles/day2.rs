@@ -24,7 +24,7 @@ pub(crate) fn main(input: Box<dyn Read + 'static>) -> ::std::result::Result<(), 
     let mut cpu = Computer::new(part1);
     cpu.run()?;
 
-    let value = cpu.get(0).expect("Program had no value 0");
+    let value = cpu.program().get(0).expect("Program had no value 0");
     println!("Part 1: Register 0 = {}", value);
 
     for noun in 0..100 {
@@ -47,14 +47,16 @@ fn trial(program: &Vec<IntMem>, noun: IntMem, verb: IntMem) -> Option<IntMem> {
 
     let mut cpu = Computer::new(part2);
     cpu.run().ok()?;
-    cpu.get(0)
+    cpu.program().get(0)
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
 
+    use intcode::Arguments;
     use intcode::IntcodeError;
+
     #[test]
     fn example_program_day2() {
         let program = vec![1, 9, 10, 3, 2, 3, 11, 0, 99, 30, 40, 50];
@@ -62,15 +64,16 @@ mod test {
         let mut cpu = Computer::new(program);
         cpu.run().unwrap();
 
-        assert_eq!(cpu.get(0), Some(3500));
-        assert_eq!(cpu.get(3), Some(70))
+        let state = cpu.program();
+        assert_eq!(state.get(0), Some(3500));
+        assert_eq!(state.get(3), Some(70))
     }
 
     fn transform(program: Vec<IntMem>) -> Result<Vec<IntMem>, IntcodeError> {
         let mut cpu = Computer::new(program);
         cpu.run()?;
 
-        Ok(cpu.tape())
+        Ok(cpu.program().tape())
     }
 
     #[test]
