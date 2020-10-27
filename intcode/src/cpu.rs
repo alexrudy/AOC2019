@@ -1,9 +1,7 @@
-use std::collections::HashMap;
-
 pub use crate::errors::{IntcodeError, Result};
 pub use crate::opcode::OpCode;
-use crate::opcode::{OpCodeResult, ParameterMode};
-pub use crate::program::Program;
+use crate::opcode::OpCodeResult;
+pub use crate::program::{Arguments, Memory, Program};
 use crate::IntMem;
 
 #[derive(Debug, Eq, PartialEq)]
@@ -12,93 +10,6 @@ pub enum CPUState {
     Output(IntMem),
     Input,
     Halt,
-}
-
-impl CPUState {
-    fn is_continue(&self) -> bool {
-        !self.is_halt()
-    }
-
-    fn is_halt(&self) -> bool {
-        *self == CPUState::Halt
-    }
-}
-
-#[derive(Debug)]
-struct Memory {
-    stack_pointer: IntMem,
-    registers: HashMap<IntMem, IntMem>,
-}
-
-impl Memory {
-    pub fn new(program: Program) -> Self {
-        Self {
-            stack_pointer: 0,
-            registers: program
-                .0
-                .into_iter()
-                .enumerate()
-                .map(|(i, v)| ((i as IntMem), v))
-                .collect::<HashMap<IntMem, IntMem>>(),
-        }
-    }
-
-    pub fn get(&self, position: IntMem) -> Option<IntMem> {
-        self.registers.get(&position).map(|v| *v)
-    }
-
-    pub fn tape(&self) -> Vec<IntMem> {
-        let largest = *self.registers.keys().max().unwrap_or(&0);
-
-        (0..=largest)
-            .map(|i| self.registers.get(&i).map(|v| *v).unwrap_or(0))
-            .collect()
-    }
-
-    fn offset(&mut self, value: IntMem) -> Result<()> {
-        self.stack_pointer += value;
-        Ok(())
-    }
-
-    fn argument(&self, address: IntMem) -> Result<IntMem> {
-        if address < 0 {
-            return Err(IntcodeError::InvalidAddress(address));
-        }
-
-        Ok(self.registers.get(&(address)).map(|v| *v).unwrap_or(0))
-    }
-
-    fn load(&mut self, address: IntMem, mode: ParameterMode) -> Result<IntMem> {
-        let target = self.argument(address)?;
-
-        match (mode, target) {
-            (ParameterMode::Immediate, t) => Ok(t),
-            (ParameterMode::Position, a) if a < 0 => Err(IntcodeError::InvalidAddress(a)),
-            (ParameterMode::Position, a) => Ok(self.registers.get(&a).map(|v| *v).unwrap_or(0)),
-            (ParameterMode::Relative, r) => Ok(self
-                .registers
-                .get(&(r + self.stack_pointer))
-                .map(|v| *v)
-                .unwrap_or(0)),
-        }
-    }
-
-    fn save(&mut self, address: IntMem, mode: ParameterMode, value: IntMem) -> Result<()> {
-        let target = self.argument(address)?;
-
-        match (mode, target) {
-            (ParameterMode::Immediate, _) => Err(IntcodeError::IllegalParameterMode(mode)),
-            (ParameterMode::Position, a) if a < 0 => Err(IntcodeError::InvalidAddress(a)),
-            (ParameterMode::Position, a) => {
-                self.registers.insert(a, value);
-                Ok(())
-            }
-            (ParameterMode::Relative, r) => {
-                self.registers.insert(r + self.stack_pointer, value);
-                Ok(())
-            }
-        }
-    }
 }
 
 #[derive(Debug)]
@@ -124,8 +35,8 @@ impl Computer {
         self.op()
     }
 
-    pub fn get(&self, position: IntMem) -> Option<IntMem> {
-        self.memory.get(position)
+    pub fn program(self) -> Program {
+        self.memory.program()
     }
 
     pub fn feed(&mut self, value: IntMem) -> Result<()> {
@@ -133,10 +44,6 @@ impl Computer {
             Some(_) => Err(IntcodeError::InputAlreadyPresent),
             None => Ok(()),
         }
-    }
-
-    pub fn tape(&self) -> Vec<IntMem> {
-        self.memory.tape()
     }
 
     pub fn follow<'c>(&'c mut self) -> Follower<'c> {

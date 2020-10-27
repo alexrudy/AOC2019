@@ -1,5 +1,7 @@
 // Implement Opcodes for Intcode
 
+use std::fmt;
+
 use crate::errors::{IntcodeError, Result};
 use crate::{Computer, IntMem};
 
@@ -45,6 +47,23 @@ impl Op {
             9 => Ok(Op::MoveStack),
             99 => Ok(Op::Halt),
             _ => Err(IntcodeError::UnknownOpcode(code)),
+        }
+    }
+}
+
+impl fmt::Display for Op {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Op::Add => write!(f, "Add"),
+            Op::Mul => write!(f, "Mul"),
+            Op::Input => write!(f, "Inp"),
+            Op::Output => write!(f, "Out"),
+            Op::JumpIfTrue => write!(f, "Jit"),
+            Op::JumpIfFalse => write!(f, "Jif"),
+            Op::LessThan => write!(f, "Clt"),
+            Op::EqualTo => write!(f, "Ceq"),
+            Op::MoveStack => write!(f, "Msp"),
+            Op::Halt => write!(f, "Hlt"),
         }
     }
 }
@@ -174,8 +193,7 @@ impl OpCode {
         Ok(OpCodeResult::Advance(self.n_arguments() as IntMem))
     }
 
-    #[cfg(test)]
-    fn modes(&self) -> Result<Vec<ParameterMode>> {
+    pub(crate) fn modes(&self) -> Result<Vec<ParameterMode>> {
         use std::convert::TryInto;
         let n = self.n_arguments();
         let mut modes = Vec::with_capacity((n - 1).try_into().unwrap());

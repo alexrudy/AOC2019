@@ -6,7 +6,7 @@ mod program;
 pub use crate::cpu::{CPUState, Computer};
 pub use crate::errors::{IntcodeError, Result};
 pub use crate::opcode::OpCode;
-pub use crate::program::Program;
+pub use crate::program::{Arguments, Assembly, Program};
 
 pub type IntMem = i64;
 
@@ -21,16 +21,16 @@ mod tests {
 
         let mut cpu = Computer::new(program);
         cpu.run().unwrap();
-
-        assert_eq!(cpu.get(0), Some(3500));
-        assert_eq!(cpu.get(3), Some(70))
+        let final_state = cpu.program();
+        assert_eq!(final_state.get(0), Some(3500));
+        assert_eq!(final_state.get(3), Some(70))
     }
 
     fn transform(program: Vec<IntMem>) -> Result<Vec<IntMem>> {
         let mut cpu = Computer::new(program);
         cpu.run()?;
 
-        Ok(cpu.tape())
+        Ok(cpu.program().tape())
     }
 
     #[test]
