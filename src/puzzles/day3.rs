@@ -4,7 +4,7 @@ use std::io::{BufRead, BufReader, Read};
 use std::str::FromStr;
 use thiserror::Error;
 
-use geometry::{Direction, Point};
+use geometry::coord2d::{Direction, Point};
 
 #[derive(Error, Debug)]
 pub(crate) enum WirePathParsingError {

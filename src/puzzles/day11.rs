@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Error, Result};
-use geometry::{BoundingBox, Direction, Point};
+use geometry::coord2d::{BoundingBox, Direction, Point};
 use intcode::{CPUState, Computer, Program};
 use std::collections::HashSet;
 use std::fmt;
@@ -127,8 +127,8 @@ impl fmt::Display for Hull {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let bbox = BoundingBox::from_points(self.panels.iter().cloned()).margin(1);
 
-        for y in bbox.top()..bbox.bottom() {
-            for x in bbox.left()..bbox.right() {
+        for y in bbox.vertical() {
+            for x in bbox.horizontal() {
                 write!(f, "{}", self.view((x, y).into()))?;
             }
             writeln!(f, "")?;

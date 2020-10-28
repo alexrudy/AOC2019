@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Error};
-use geometry::Point;
+use geometry::coord2d::Point;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::convert::TryInto;
 use std::fmt;
