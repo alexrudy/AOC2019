@@ -1,7 +1,7 @@
 use crate::Position;
 use std::convert::From;
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub struct Point3D {
     pub x: Position,
     pub y: Position,
@@ -9,7 +9,7 @@ pub struct Point3D {
 }
 
 impl Point3D {
-    fn new(x: Position, y: Position, z: Position) -> Self {
+    pub fn new(x: Position, y: Position, z: Position) -> Self {
         Point3D { x, y, z }
     }
 

@@ -159,6 +159,4 @@ pub(crate) fn main(input: Box<dyn Read + 'static>) -> ::std::result::Result<(), 
 }
 
 #[cfg(test)]
-mod test {
-    use super::*;
-}
+mod test {}

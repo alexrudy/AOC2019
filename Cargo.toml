@@ -16,5 +16,6 @@ anyhow = "*"
 permutohedron = "0.2.4"
 paste = "*"
 regex = "1"
+num = "*"
 
 [workspace]

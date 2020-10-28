@@ -11,6 +11,7 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io;
 
+mod iterhelper;
 mod puzzles;
 
 type Error = anyhow::Error;
@@ -39,6 +40,7 @@ lazy_static! {
             day!(9),
             day!(10),
             day!(11),
+            day!(12),
         ];
 
         for (d, func) in days.into_iter() {
@@ -78,7 +80,18 @@ fn driver() -> Result<(), Error> {
     let day = value_t!(matches, "day", u32).unwrap();
     println!("Day {}", day);
 
-    let filename = matches.value_of("input");
+    let reader = get_input_reader(day, matches.value_of("input"))?;
+
+    match SOLVERS.get(&day) {
+        None => panic!("No code found for day {}", day),
+        Some(actor) => actor(reader),
+    }
+}
+
+type IOResult<T> = std::io::Result<T>;
+type BoxedRead = Box<dyn ::std::io::Read + 'static>;
+
+fn get_input_reader(day: u32, filename: Option<&str>) -> Result<BoxedRead, Error> {
     let reader: Box<dyn ::std::io::Read + 'static> = match filename {
         Some("-") => Box::new(::std::io::stdin()),
         Some(path) => {
@@ -87,14 +100,10 @@ fn driver() -> Result<(), Error> {
         }
         None => get_default_input(day).map_err(|e| AoCError::DefaultInputNotFound(day, e))?,
     };
-
-    match SOLVERS.get(&day) {
-        None => panic!("No code found for day {}", day),
-        Some(actor) => actor(reader),
-    }
+    Ok(reader)
 }
 
-fn get_default_input(day: u32) -> std::io::Result<Box<dyn ::std::io::Read>> {
+fn get_default_input(day: u32) -> IOResult<BoxedRead> {
     let mut p = ::std::path::PathBuf::from("puzzles");
     p.push(format!("{}", day));
     p.push("input.txt");
