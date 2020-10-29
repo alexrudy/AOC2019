@@ -2,6 +2,8 @@ use cursive::traits::*;
 use cursive::Printer;
 use cursive::XY;
 
+use geometry::coord2d::Edge;
+
 use crate::{Screen, Tile};
 
 pub(crate) struct ScreenView {
@@ -22,10 +24,20 @@ impl View for ScreenView {
             for (i, x) in bbox.horizontal().enumerate() {
                 let tile = match self.screen.get(&(x, y).into()).unwrap_or(&Tile::Empty) {
                     Tile::Empty => " ",
-                    Tile::Block => "X",
-                    Tile::Ball => "o",
-                    Tile::Wall => "|",
-                    Tile::Paddle => "_",
+                    Tile::Block => "█",
+                    Tile::Ball => "●",
+                    Tile::Wall => match board_bbox.edge((x, y).into()) {
+                        Some(Edge::TopLeft) => "┏",
+                        Some(Edge::TopRight) => "┓",
+                        Some(Edge::BottomLeft) => "┗",
+                        Some(Edge::BottomRight) => "┛",
+                        Some(Edge::Left) => "┃",
+                        Some(Edge::Right) => "┃",
+                        Some(Edge::Top) => "━",
+                        Some(Edge::Bottom) => "━",
+                        None => "+",
+                    },
+                    Tile::Paddle => "─",
                 };
                 eprintln!("({},{}) = {}", x, y, tile);
                 printer.print((i, j), tile)

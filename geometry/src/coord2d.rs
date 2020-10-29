@@ -193,6 +193,18 @@ impl FromStr for Point {
     }
 }
 
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum Edge {
+    Left,
+    TopLeft,
+    Top,
+    TopRight,
+    Right,
+    BottomRight,
+    Bottom,
+    BottomLeft,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BoundingBox {
     left: Position,
@@ -380,6 +392,24 @@ impl BoundingBox {
             || point.x == self.right
             || point.y == self.top
             || point.y == self.bottom
+    }
+
+    /// Return the direction for this edge.
+    ///
+    /// This method prioritizes left then top directions when a point
+    /// satisfies multiple edges. (left - top - right - bottom)
+    pub fn edge(&self, point: Point) -> Option<Edge> {
+        match (point.x, point.y) {
+            (x, y) if self.left == x && self.top == y => Some(Edge::TopLeft),
+            (x, y) if self.left == x && self.bottom == y => Some(Edge::BottomLeft),
+            (x, y) if self.right == x && self.top == y => Some(Edge::TopRight),
+            (x, y) if self.right == x && self.bottom == y => Some(Edge::BottomRight),
+            (x, _) if self.left == x => Some(Edge::Left),
+            (_, y) if self.top == y => Some(Edge::Top),
+            (x, _) if self.right == x => Some(Edge::Right),
+            (_, y) if self.bottom == y => Some(Edge::Bottom),
+            _ => None,
+        }
     }
 
     /// Iterate through all the points contained in this
