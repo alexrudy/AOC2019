@@ -20,7 +20,7 @@ fn program(filename: Option<&str>) -> Result<Program> {
 }
 
 fn main() -> Result<()> {
-    let matches = App::new("Advent of Code 2019")
+    let matches = App::new("Intcode Interpreter - Advent of Code 2019")
         .version("1.0")
         .author("Alex Rudy <opensource@alexrudy.net>")
         .about("Execute Intcode Programs")

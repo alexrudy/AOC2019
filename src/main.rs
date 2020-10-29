@@ -1,3 +1,4 @@
+#![feature(result_cloned)]
 #![feature(concat_idents)]
 
 use clap::{value_t, App, Arg};
