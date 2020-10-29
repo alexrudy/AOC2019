@@ -1,22 +1,24 @@
 [package]
-name = "aoc2019"
+name = "breakout"
 version = "0.1.0"
 authors = ["Alex Rudy <alex.rudy@bit.ly>"]
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[dependencies]
-clap = "2.33"
-lazy_static = "*"
-thiserror = "*"
-intcode = { path = "intcode" }
-geometry = { path = "geometry" }
-breakout = { path = "breakout" }
-anyhow = "*"
-permutohedron = "0.2.4"
-paste = "*"
-regex = "1"
-num = "*"
+[lib]
+name = "breakout"
+path = "src/lib.rs"
 
-[workspace]
+[[bin]]
+name = "breakout"
+path = "src/cli.rs"
+
+
+[dependencies]
+thiserror = "*"
+anyhow = "*"
+clap = "*"
+intcode = { path = "../intcode" }
+geometry = { path = "../geometry" }
+cursive = "*"
