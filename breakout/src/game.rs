@@ -1,10 +1,11 @@
 use anyhow::{anyhow, Error, Result};
 use geometry::coord2d::{BoundingBox, Point};
-use intcode::{CPUState, Computer, IntcodeError, Program};
+use intcode::{CPUState, Computer, Program};
 
 use std::collections::HashMap;
 use std::convert::{TryFrom, TryInto};
 use std::default::Default;
+use std::fmt::Debug;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum Tile {
@@ -34,6 +35,8 @@ impl TryFrom<i64> for Tile {
 pub struct Screen {
     score: i64,
     pixels: HashMap<Point, Tile>,
+    paddle: Option<Point>,
+    ball: Option<Point>,
 }
 
 impl Screen {
@@ -43,6 +46,23 @@ impl Screen {
 
     fn set_tile(&mut self, position: Point, tile: Tile) {
         self.pixels.insert(position, tile);
+        match tile {
+            Tile::Paddle => {
+                self.paddle = Some(position);
+            }
+            Tile::Ball => {
+                self.ball = Some(position);
+            }
+            _ => {}
+        }
+    }
+
+    pub fn paddle(&self) -> Option<Point> {
+        self.paddle
+    }
+
+    pub fn ball(&self) -> Option<Point> {
+        self.ball
     }
 
     pub fn count(&self, tile: Tile) -> usize {
@@ -57,7 +77,7 @@ impl Screen {
         self.pixels.get(point)
     }
 
-    pub(crate) fn score(&self) -> i64 {
+    pub fn score(&self) -> i64 {
         self.score
     }
 }
@@ -67,37 +87,96 @@ impl Default for Screen {
         Screen {
             score: 0,
             pixels: HashMap::default(),
+            paddle: None,
+            ball: None,
         }
+    }
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum Joystick {
+    Left,
+    Neutral,
+    Right,
+}
+
+pub trait Controller: Debug {
+    fn control(&self, screen: &Screen) -> Joystick;
+}
+
+type BoxedController = Box<dyn Controller + Send + 'static>;
+
+/// Simple controller provides a basic version of AI which
+/// can follow the ball around.
+#[derive(Debug)]
+pub struct SimpleController {}
+
+impl SimpleController {
+    pub fn new() -> Self {
+        SimpleController {}
+    }
+}
+
+impl Controller for SimpleController {
+    fn control(&self, screen: &Screen) -> Joystick {
+        let pos = screen
+            .paddle()
+            .and_then(|p| screen.ball().map(|b| (b.x - p.x).signum()));
+
+        match pos {
+            Some(-1) => Joystick::Left,
+            Some(0) => Joystick::Neutral,
+            Some(1) => Joystick::Right,
+            Some(_) => panic!("Invalid value!"),
+            None => Joystick::Neutral,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct NeutralController {}
+
+impl NeutralController {
+    pub fn new() -> Self {
+        NeutralController {}
+    }
+}
+
+impl Controller for NeutralController {
+    fn control(&self, _: &Screen) -> Joystick {
+        Joystick::Neutral
     }
 }
 
 #[derive(Debug)]
 pub(crate) enum State {
     Halt,
-    Input,
+    Step,
 }
 
 #[derive(Debug)]
 pub struct Breakout {
     computer: Computer,
     screen: Screen,
+    controller: BoxedController,
 }
 
 impl Breakout {
-    pub fn new(program: Program) -> Self {
+    pub fn new(program: Program, controller: BoxedController) -> Self {
         Breakout {
             computer: Computer::new(program),
             screen: Screen::default(),
+            controller: controller,
         }
     }
 
-    pub fn new_with_coins(mut program: Program) -> Self {
-        program.insert(0, 2).unwrap();
-        Breakout::new(program)
+    pub fn new_without_controller(program: Program) -> Self {
+        Breakout::new(program, Box::new(NeutralController::new()))
     }
 
-    pub(crate) fn feed(&mut self, value: i64) {
-        self.computer.feed(value);
+    pub fn new_with_coins(mut program: Program, controller: BoxedController) -> Self {
+        program.insert(0, 2).unwrap();
+        Breakout::new(program, controller)
     }
 
     pub(crate) fn step(&mut self) -> Result<State> {
@@ -120,10 +199,27 @@ impl Breakout {
                         command.clear();
                     }
                 }
-                CPUState::Input => return Ok(State::Input),
+                CPUState::Input => {
+                    let _ = match self.controller.control(&self.screen) {
+                        Joystick::Left => self.computer.feed(-1),
+                        Joystick::Neutral => self.computer.feed(0),
+                        Joystick::Right => self.computer.feed(1),
+                    };
+                    return Ok(State::Step);
+                }
                 CPUState::Halt => return Ok(State::Halt),
             }
         }
+    }
+
+    pub fn run(&mut self) -> Result<()> {
+        loop {
+            match self.step()? {
+                State::Step => {}
+                State::Halt => break,
+            }
+        }
+        Ok(())
     }
 
     pub fn next(&mut self) -> Result<&Screen> {

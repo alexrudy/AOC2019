@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Error};
-use breakout::{start, Breakout};
+use breakout::arcade;
 use clap::{App, Arg};
 use intcode::Program;
 use std::fs::File;
@@ -31,12 +31,13 @@ fn main() -> Result<()> {
                 .takes_value(true)
                 .index(1),
         )
+        .arg(Arg::with_name("ai").short("a").help("Use AI?"))
         .get_matches();
 
     let filename = matches.value_of("program");
-    let game = Breakout::new_with_coins(load_program(filename)?);
 
-    start(game)?;
+    let program = load_program(filename)?;
+    arcade(program, matches.is_present("ai"))?;
 
     Ok(())
 }

@@ -1,8 +1,8 @@
-use std::sync::{mpsc, Arc, Mutex};
+use std::sync::{Arc, Mutex};
 
 use cursive::traits::*;
 use cursive::view::ViewWrapper;
-use cursive::views::{ResizedView, TextView};
+use cursive::views::TextView;
 use cursive::wrap_impl;
 use cursive::Printer;
 use cursive::Vec2;
@@ -70,6 +70,12 @@ pub(crate) struct ScoreView {
 
 impl ViewWrapper for ScoreView {
     wrap_impl!(self.text: TextView);
+
+    fn wrap_layout(&mut self, size: Vec2) {
+        self.text
+            .set_content(format!("{}", self.score.lock().unwrap()));
+        self.text.layout(size)
+    }
 }
 
 impl ScoreView {
@@ -77,55 +83,6 @@ impl ScoreView {
         Self {
             score,
             text: TextView::new("0").center(),
-        }
-    }
-}
-
-pub(crate) struct MessageView {
-    channel: mpsc::Receiver<String>,
-    message: Option<String>,
-}
-
-pub(crate) struct MessageClient {
-    channel: mpsc::Sender<String>,
-}
-
-impl MessageClient {
-    pub(crate) fn set(&mut self, msg: String) -> Result<(), mpsc::SendError<String>> {
-        self.channel.send(msg)
-    }
-}
-
-impl MessageView {
-    fn new(channel: mpsc::Receiver<String>) -> Self {
-        Self {
-            channel,
-            message: None,
-        }
-    }
-
-    pub(crate) fn pair() -> (MessageClient, Self) {
-        let (tx, rx) = mpsc::channel();
-        (MessageClient { channel: tx }, Self::new(rx))
-    }
-
-    fn recieve(&mut self) {
-        while let Ok(msg) = self.channel.try_recv() {
-            self.message = Some(msg);
-        }
-    }
-}
-
-impl View for MessageView {
-    fn layout(&mut self, _: Vec2) {
-        // Before drawing, we'll want to update the buffer
-        self.recieve();
-    }
-
-    fn draw(&self, printer: &Printer) {
-        // Print the end of the buffer
-        if let Some(ref msg) = self.message {
-            printer.print((0, 0), msg);
         }
     }
 }
