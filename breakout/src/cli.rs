@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Error};
+use anyhow::Error;
 use breakout::arcade;
 use clap::{App, Arg};
 use intcode::Program;
