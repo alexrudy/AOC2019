@@ -24,7 +24,6 @@ jobs:
         with:
           command: test
           args: --all-targets
-      - run: rustup component add rustfmt
       - uses: actions-rs/cargo@v1
         with:
           command: fmt
