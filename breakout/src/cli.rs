@@ -34,7 +34,7 @@ fn main() -> Result<()> {
         .get_matches();
 
     let filename = matches.value_of("program");
-    let game = Breakout::new(load_program(filename)?);
+    let game = Breakout::new_with_coins(load_program(filename)?);
 
     start(game)?;
 

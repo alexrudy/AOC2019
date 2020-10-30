@@ -56,6 +56,10 @@ impl Screen {
     pub(crate) fn get(&self, point: &Point) -> Option<&Tile> {
         self.pixels.get(point)
     }
+
+    pub(crate) fn score(&self) -> i64 {
+        self.score
+    }
 }
 
 impl Default for Screen {
@@ -87,14 +91,13 @@ impl Breakout {
         }
     }
 
-    pub fn new_with_coins(program: Program) -> Self {
-        let mut breakout = Breakout::new(program);
-        match breakout.computer.feed(2) {
-            Ok(()) => {}
-            Err(IntcodeError::InputAlreadyPresent) => {}
-            Err(e) => panic!("{}", e),
-        }
-        breakout
+    pub fn new_with_coins(mut program: Program) -> Self {
+        program.insert(0, 2).unwrap();
+        Breakout::new(program)
+    }
+
+    pub(crate) fn feed(&mut self, value: i64) {
+        self.computer.feed(value);
     }
 
     pub(crate) fn step(&mut self) -> Result<State> {
