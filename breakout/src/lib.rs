@@ -23,8 +23,6 @@ pub fn start(game: Breakout) -> Result<(), Error> {
     app.add_global_callback('q', Cursive::quit);
 
     let engine = Engine::build(game, &mut app);
-
-    eprintln!("Starting worker...");
     thread::spawn(move || worker(engine));
 
     app.run();
@@ -72,28 +70,44 @@ impl Engine {
 
         app.add_layer(
             OnEventView::new(layout)
-                .on_event(Key::Left, move |_| etx_left.send(Key::Left).unwrap())
-                .on_event(Key::Right, move |_| etx_right.send(Key::Right).unwrap()),
+                .on_event(Key::Left, move |_| {
+                    etx_left.send(Key::Left);
+                })
+                .on_event(Key::Right, move |_| {
+                    etx_right.send(Key::Right);
+                }),
         );
         engine
+    }
+
+    fn control(&self) -> Option<Key> {
+        let mut key = None;
+        loop {
+            match self.controller.try_recv() {
+                Ok(k) if k == Key::Left || k == Key::Right => {
+                    key = Some(k);
+                }
+                Ok(_) => {}
+                Err(mpsc::TryRecvError::Empty) => break,
+                Err(mpsc::TryRecvError::Disconnected) => panic!("Disconnected"),
+            }
+        }
+        key
     }
 }
 
 fn worker(mut engine: Engine) -> () {
     loop {
-        eprintln!("Running arcade");
         match engine.breakout.step().unwrap() {
-            State::Input => match engine.controller.try_recv() {
-                Ok(Key::Left) => engine.breakout.feed(-1),
-                Ok(Key::Right) => engine.breakout.feed(1),
-                Ok(_) => engine.breakout.feed(0),
-                Err(mpsc::TryRecvError::Empty) => engine.breakout.feed(0),
-                Err(_) => break,
+            State::Input => match engine.control() {
+                Some(Key::Left) => engine.breakout.feed(-1),
+                Some(Key::Right) => engine.breakout.feed(1),
+                Some(_) => engine.breakout.feed(0),
+                None => engine.breakout.feed(0),
             },
             State::Halt => break,
         }
-        thread::sleep(Duration::from_millis(300));
-        eprintln!("Updating screen");
+        thread::sleep(Duration::from_millis(500));
         *engine.screen.lock().unwrap() = engine.breakout.screen().clone();
         *engine.score.lock().unwrap() = engine.breakout.screen().score() as i32;
     }
