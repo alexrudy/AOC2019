@@ -1,5 +1,6 @@
 #![feature(result_cloned)]
 #![feature(concat_idents)]
+#![deny(clippy::all)]
 
 use clap::{value_t, App, Arg};
 

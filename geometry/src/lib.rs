@@ -1,3 +1,4 @@
+#![deny(clippy::all)]
 #![allow(dead_code)]
 
 pub mod coord2d;
