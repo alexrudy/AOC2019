@@ -77,15 +77,12 @@ impl FromStr for Reactant {
 #[derive(Clone, Eq, PartialEq, Hash)]
 struct Reaction {
     inputs: Vec<Reactant>,
-    outputs: Vec<Reactant>,
+    output: Reactant,
 }
 
 impl Reaction {
-    fn output(&self) -> Result<&Reactant, Error> {
-        if self.outputs.len() != 1 {
-            return Err(anyhow!("Reaction does not produce a single output!"));
-        }
-        Ok(&self.outputs[0])
+    fn output(&self) -> &Reactant {
+        &self.output
     }
 
     fn repeat(&self, n: usize) -> Self {
@@ -95,11 +92,7 @@ impl Reaction {
                 .iter()
                 .map(|r| Reactant::new(r.chemical.clone(), r.quantity * n))
                 .collect(),
-            outputs: self
-                .outputs
-                .iter()
-                .map(|r| Reactant::new(r.chemical.clone(), r.quantity * n))
-                .collect(),
+            output: Reactant::new(self.output.chemical.clone(), self.output.quantity * n),
         }
     }
 }
@@ -116,16 +109,7 @@ impl fmt::Debug for Reaction {
                 .join(", "),
         )?;
         write!(f, " => ")?;
-        write!(
-            f,
-            "{})",
-            self.outputs
-                .iter()
-                .map(|r| format!("{} {}", r.quantity, r.chemical))
-                .collect::<Vec<String>>()
-                .join(", "),
-        )?;
-
+        write!(f, "{} {})", self.output.quantity, self.output.chemical)?;
         Ok(())
     }
 }
@@ -141,18 +125,21 @@ impl FromStr for Reaction {
                 .map(|s| s.parse::<Reactant>())
                 .collect::<Result<Vec<Reactant>, Error>>()?
         };
-        let outputs = {
+        let output = {
             let text = parts.next().ok_or(anyhow!("Missing outputs!"))?;
-            text.split(',')
-                .map(|s| s.parse::<Reactant>())
-                .collect::<Result<Vec<Reactant>, Error>>()?
+            let mut outputs = text.split(',').map(|s| s.parse::<Reactant>());
+            let output = outputs.next().ok_or(anyhow!("Expected an output!"))??;
+            if outputs.next().is_some() {
+                return Err(anyhow!("Too many outputs: {}", s));
+            }
+            output
         };
 
         if parts.next().is_some() {
             return Err(anyhow!("Too much data to parse: {}", s));
         }
 
-        Ok(Reaction { inputs, outputs })
+        Ok(Reaction { inputs, output })
     }
 }
 
@@ -168,7 +155,7 @@ impl Library {
         let mut items = HashMap::new();
         for line in reader.lines() {
             let reaction: Reaction = line?.parse()?;
-            items.insert(reaction.output()?.chemical.clone(), reaction);
+            items.insert(reaction.output().chemical.clone(), reaction);
         }
 
         Ok(Library { reactions: items })
@@ -309,7 +296,7 @@ impl RecipeBuilder {
     }
 
     fn add(&mut self, reaction: Reaction) -> Result<(), Error> {
-        let output = reaction.output()?;
+        let output = reaction.output();
         let amount = self
             .requirements
             .get_mut(&output.chemical)
@@ -322,7 +309,7 @@ impl RecipeBuilder {
 
         let reaction = reaction.repeat(n as usize);
 
-        *amount -= reaction.output()?.quantity as isize;
+        *amount -= reaction.output().quantity as isize;
 
         for input in &reaction.inputs {
             *self.requirements.entry(input.chemical.clone()).or_insert(0) +=
@@ -402,9 +389,11 @@ impl CargoHold {
                 .checked_sub(input.quantity)
                 .ok_or(CargoHoldError::InsufficientChemical(input.chemical.clone()))?;
         }
-        for output in &reaction.outputs {
-            *self.chemicals.entry(output.chemical.clone()).or_insert(0) += output.quantity;
-        }
+        *self
+            .chemicals
+            .entry(reaction.output.chemical.clone())
+            .or_insert(0) += reaction.output.quantity;
+
         Ok(())
     }
 
@@ -466,7 +455,7 @@ mod test {
 
     #[test]
     fn parse_reaction() {
-        let reaction: Reaction = "10 ORE => 2 A, 3 B".parse().unwrap();
+        let reaction: Reaction = "10 ORE => 2 A".parse().unwrap();
         assert_eq!(reaction.inputs, vec![Reactant::new(Chemical::Ore, 10)]);
         let reaction: Reaction = "7 A, 1 E => 2 FUEL".parse().unwrap();
         assert_eq!(
@@ -476,7 +465,7 @@ mod test {
                 Reactant::new(Chemical::Named("E".into()), 1)
             ]
         );
-        assert_eq!(reaction.outputs, vec![Reactant::new(Chemical::Fuel, 2)]);
+        assert_eq!(reaction.output, Reactant::fuel(2));
     }
 
     #[test]
