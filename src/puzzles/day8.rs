@@ -1,4 +1,7 @@
 use anyhow::{anyhow, Error};
+
+use geometry::coord2d::BoundingBox;
+
 use std::fmt;
 use std::io::Read;
 
@@ -73,15 +76,24 @@ struct RenderedImage {
 
 impl fmt::Display for RenderedImage {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for row in 0..self.height {
-            for col in 0..self.width {
-                let px = self.data[col + (row * self.width)];
+        let bbox = BoundingBox::new(0, self.width as i32, 0, self.height as i32).margin(1);
+        for r in bbox.vertical() {
+            let row = r as isize;
+            for c in bbox.horizontal() {
+                let col = c as isize;
+                let px = {
+                        if 0 <= col && col < self.width as isize && 0 <= row && row < self.height as isize {
+                            self.data[(col + (row * self.width as isize)) as usize]
+                        } else {
+                            0
+                        }
+                    };
                 write!(
                     f,
                     "{}",
                     match px {
                         0 => " ",
-                        1 => "#",
+                        1 => "█",
                         _ => "?",
                     }
                 )?;

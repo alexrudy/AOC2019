@@ -9,8 +9,8 @@ pub(crate) fn main(input: Box<dyn Read + 'static>) -> ::std::result::Result<(), 
     {
         let mut cpu = Computer::new(program.clone());
 
-        // Set to air conditioner ID
-        cpu.feed(5)?;
+        // Set to diagnostic ID
+        cpu.feed(1)?;
 
         // Find non-zero outputs
         let outputs = cpu

@@ -288,7 +288,7 @@ pub(crate) fn main(input: Box<dyn Read + 'static>) -> ::std::result::Result<(), 
     println!("Part 1: Total energy = {}", final_state.total_energy());
 
     let cycle = moon_periods(jupiter.clone().evolve()).unwrap();
-    println!("Part 2: cycles afert {} steps", cycle);
+    println!("Part 2: cycles after {} steps", cycle);
 
     Ok(())
 }

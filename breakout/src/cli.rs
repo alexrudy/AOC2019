@@ -31,7 +31,7 @@ fn main() -> Result<()> {
                 .takes_value(true)
                 .index(1),
         )
-        .arg(Arg::with_name("ai").short("a").help("Use AI?"))
+        .arg(Arg::with_name("ai").long("ai").help("Use AI?"))
         .get_matches();
 
     let filename = matches.value_of("program");
