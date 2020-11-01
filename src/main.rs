@@ -119,7 +119,7 @@ fn get_default_input(day: u32) -> IOResult<BoxedRead> {
 
 #[derive(Debug, Error)]
 pub enum AoCError {
-    #[error("No code found for day {0}")]
+    #[error("No module found for day {0}")]
     DayNotFound(u32),
 
     #[error("Input not found: puzzles/{0}/input.txt")]
