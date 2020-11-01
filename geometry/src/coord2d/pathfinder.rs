@@ -195,11 +195,11 @@ mod test {
     use crate::Position;
 
     #[derive(Debug, Default)]
-    struct TestingMap {
+    struct SimpleMap {
         spaces: HashSet<Point>,
     }
 
-    impl From<Vec<Point>> for TestingMap {
+    impl From<Vec<Point>> for SimpleMap {
         fn from(points: Vec<Point>) -> Self {
             Self {
                 spaces: points.into_iter().collect(),
@@ -207,11 +207,11 @@ mod test {
         }
     }
 
-    impl FromStr for TestingMap {
+    impl FromStr for SimpleMap {
         type Err = String;
 
         fn from_str(s: &str) -> Result<Self, Self::Err> {
-            let mut map = TestingMap::default();
+            let mut map = SimpleMap::default();
             for (y, line) in s.lines().enumerate() {
                 for (x, c) in line.trim().chars().enumerate() {
                     match c {
@@ -227,15 +227,54 @@ mod test {
         }
     }
 
-    impl Map for TestingMap {
+    impl Map for SimpleMap {
         fn is_traversable(&self, location: Point) -> bool {
             self.spaces.contains(&location)
         }
     }
 
+    #[derive(Debug, Default)]
+    struct OpenMap {
+        walls: HashSet<Point>,
+    }
+
+    impl From<Vec<Point>> for OpenMap {
+        fn from(points: Vec<Point>) -> Self {
+            Self {
+                walls: points.into_iter().collect(),
+            }
+        }
+    }
+
+    impl FromStr for OpenMap {
+        type Err = String;
+
+        fn from_str(s: &str) -> Result<Self, Self::Err> {
+            let mut map = OpenMap::default();
+            for (y, line) in s.lines().enumerate() {
+                for (x, c) in line.trim().chars().enumerate() {
+                    match c {
+                        '.' => {}
+                        '#' => {
+                            map.walls.insert((x as Position, y as Position).into());
+                        }
+                        _ => return Err(format!("Unexpected map character: {}", c)),
+                    };
+                }
+            }
+            Ok(map)
+        }
+    }
+
+    impl Map for OpenMap {
+        fn is_traversable(&self, location: Point) -> bool {
+            !self.walls.contains(&location)
+        }
+    }
+
     #[test]
     fn simple() {
-        let map: TestingMap = vec![(0, 0).into()].into();
+        let map: SimpleMap = vec![(0, 0).into()].into();
 
         assert_eq!(
             map.path((0, 0).into(), (0, 0).into()),
@@ -245,11 +284,21 @@ mod test {
 
     #[test]
     fn shortest() {
-        let map: TestingMap = include_str!("../../examples/pathfinding_multi.txt")
+        let map: SimpleMap = include_str!("../../examples/pathfinding_multi.txt")
             .parse()
             .unwrap();
 
         let path = map.path((1, 1).into(), (1, 12).into()).unwrap();
         assert_eq!(path.distance(), 19);
+    }
+
+    #[test]
+    fn openmap() {
+        let map: OpenMap = include_str!("../../examples/pathfinding_island.txt")
+            .parse()
+            .unwrap();
+
+        let path = map.path((0, 0).into(), (2, 2).into()).unwrap();
+        assert_eq!(path.distance(), 10);
     }
 }
