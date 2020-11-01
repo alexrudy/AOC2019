@@ -2,10 +2,10 @@ use anyhow::anyhow;
 use anyhow::Error;
 use geometry::coord2d::{pathfinder, BoundingBox, Direction, Point};
 use geometry::Position;
-use intcode::IntMem;
+use intcode::{CPUState, Computer, IntMem, Program};
 
 use std::collections::{HashMap, VecDeque};
-use std::convert::TryFrom;
+use std::convert::{TryFrom, TryInto};
 use std::default::Default;
 use std::fmt::{self, Debug};
 use std::io::Read;
@@ -122,14 +122,17 @@ impl pathfinder::Map for Map {
 }
 
 impl Map {
+    /// Mark the location of a tile.
     fn insert(&mut self, point: Point, tile: Tile) {
         self.tiles.insert(point, tile);
     }
 
+    /// Check what tile is at a given location
     fn check(&self, point: Point) -> Option<Tile> {
         self.tiles.get(&point).copied()
     }
 
+    /// Iterate over points of a given tile type
     fn locate(&self, tile: Tile) -> impl Iterator<Item = Point> {
         self.tiles
             .clone()
@@ -138,6 +141,7 @@ impl Map {
             .map(|(p, _)| p)
     }
 
+    /// A pathfinidng object for realized paths
     fn realized(&self) -> Realized {
         Realized { map: self }
     }
@@ -153,6 +157,8 @@ impl Map {
     }
 }
 
+/// Implement pathfinding over only explored / realized
+/// tiles, excluding any unexplored point.
 #[derive(Debug)]
 struct Realized<'m> {
     map: &'m Map,
@@ -203,13 +209,13 @@ impl ShipSection {
         }
     }
 
+    fn from_program(program: Program) -> Self {
+        ShipSection::new(Droid::new(Controller::new(program)))
+    }
+
     fn walk(&mut self, direction: Direction) -> Result<Tile, Error> {
         let position = self.droid.location().step(direction);
         let tile = self.droid.step(direction)?;
-        eprintln!(
-            "Explored {:?} {:?} and found {:?}",
-            direction, position, tile
-        );
         self.map.insert(position, tile);
         Ok(tile)
     }
@@ -241,8 +247,6 @@ impl ShipSection {
             if self.map.check(to_explore).is_some() {
                 continue;
             }
-
-            eprintln!("Checking {:?}", to_explore);
 
             // How do we get to the point to explore
             let path = self
@@ -279,7 +283,6 @@ impl ShipSection {
                         // If we stumble upon the target along the way,
                         // add a candidate to our list of paths
                         if target == tile {
-                            eprintln!("Found target at {:?}", self.droid().location());
                             candidates.push(
                                 self.map
                                     .realized()
@@ -339,8 +342,52 @@ impl fmt::Display for ShipSection {
     }
 }
 
+#[derive(Debug)]
+struct Controller {
+    cpu: Computer,
+}
+
+impl Controller {
+    fn new(program: Program) -> Self {
+        Self {
+            cpu: Computer::new(program),
+        }
+    }
+}
+
+impl RemoteDroid for Controller {
+    fn command(&mut self, direction: Direction) -> Result<Tile, Error> {
+        let cmd = match direction {
+            Direction::Up => 1,
+            Direction::Down => 2,
+            Direction::Left => 3,
+            Direction::Right => 4,
+        };
+        self.cpu.feed(cmd)?;
+        loop {
+            match self.cpu.op()? {
+                CPUState::Output(t) => {
+                    return t.try_into();
+                }
+                CPUState::Continue => {}
+                CPUState::Input => {
+                    return Err(anyhow!("Computer expected input!"));
+                }
+                CPUState::Halt => {
+                    return Err(anyhow!("Comptuer halted!"));
+                }
+            }
+        }
+    }
+}
+
 pub(crate) fn main(input: Box<dyn Read + 'static>) -> ::std::result::Result<(), Error> {
-    println!("Hello!");
+    let program = Program::read(input)?;
+
+    let mut ship = ShipSection::from_program(program.clone());
+
+    let path = ship.find_path_to_tile(Tile::OxygenSystem)?;
+    println!("Part 1: {} steps to the oxygen system", path.distance());
 
     Ok(())
 }
@@ -348,6 +395,8 @@ pub(crate) fn main(input: Box<dyn Read + 'static>) -> ::std::result::Result<(), 
 #[cfg(test)]
 mod test {
     use super::*;
+
+    use crate::get_default_input;
 
     #[derive(Debug)]
     struct UniformRoom(Tile);
@@ -465,5 +514,13 @@ mod test {
         eprintln!("Finding path on {}", map);
         let path = ship.find_path_to_tile(Tile::OxygenSystem).unwrap();
         assert_eq!(path.distance(), 19);
+    }
+
+    #[test]
+    fn answer_part1() {
+        let program = Program::read(get_default_input(15).unwrap()).unwrap();
+        let mut ship = ShipSection::from_program(program.clone());
+        let path = ship.find_path_to_tile(Tile::OxygenSystem).unwrap();
+        assert_eq!(path.distance(), 282);
     }
 }
