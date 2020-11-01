@@ -82,12 +82,16 @@ impl fmt::Display for RenderedImage {
             for c in bbox.horizontal() {
                 let col = c as isize;
                 let px = {
-                        if 0 <= col && col < self.width as isize && 0 <= row && row < self.height as isize {
-                            self.data[(col + (row * self.width as isize)) as usize]
-                        } else {
-                            0
-                        }
-                    };
+                    if 0 <= col
+                        && col < self.width as isize
+                        && 0 <= row
+                        && row < self.height as isize
+                    {
+                        self.data[(col + (row * self.width as isize)) as usize]
+                    } else {
+                        0
+                    }
+                };
                 write!(
                     f,
                     "{}",
@@ -150,6 +154,9 @@ mod test {
     fn examples_part2() {
         let image = Image::read((2, 2), Box::new("0222112222120000".as_bytes())).unwrap();
 
-        assert_eq!(format!("{}", image.render()), "     \n  █  \n █   \n     \n     \n");
+        assert_eq!(
+            format!("{}", image.render()),
+            "     \n  █  \n █   \n     \n     \n"
+        );
     }
 }
