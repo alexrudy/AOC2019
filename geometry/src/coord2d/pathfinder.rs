@@ -42,11 +42,11 @@ impl Path {
         self.steps.front().unwrap()
     }
 
-    fn destination(&self) -> &Point {
+    pub fn destination(&self) -> &Point {
         self.steps.back().unwrap()
     }
 
-    fn distance(&self) -> usize {
+    pub fn distance(&self) -> usize {
         self.steps.len() - 1
     }
 }

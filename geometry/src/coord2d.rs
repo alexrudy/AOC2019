@@ -134,6 +134,16 @@ impl Point {
             y: self.y - other.y,
         }
     }
+
+    pub fn direction(self, other: Point) -> Option<Direction> {
+        match (self.x, self.y) {
+            (x, y) if x == other.x + 1 && y == other.y => Some(Direction::Left),
+            (x, y) if x == other.x - 1 && y == other.y => Some(Direction::Right),
+            (x, y) if x == other.x && y == other.y + 1 => Some(Direction::Up),
+            (x, y) if x == other.x && y == other.y - 1 => Some(Direction::Down),
+            _ => None,
+        }
+    }
 }
 
 impl cmp::Ord for Point {
