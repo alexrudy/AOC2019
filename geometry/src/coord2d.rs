@@ -12,6 +12,8 @@ use thiserror::Error;
 
 use crate::Position;
 
+pub mod pathfinder;
+
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Direction {
     Up,
