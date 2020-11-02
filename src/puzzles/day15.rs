@@ -149,12 +149,6 @@ impl Map {
     fn bbox(&self) -> BoundingBox {
         BoundingBox::from_points(self.tiles.keys().copied())
     }
-
-    fn options(&self, location: Point) -> Vec<Direction> {
-        Direction::all()
-            .filter(|d| self.check(location.step(*d)).unwrap_or(Tile::Empty) != Tile::Wall)
-            .collect()
-    }
 }
 
 /// Implement pathfinding over only explored / realized
@@ -315,6 +309,40 @@ impl ShipSection {
             .cloned()
     }
 
+    fn time_to_oxygenate(&mut self) -> Result<usize, Error> {
+        use geometry::coord2d::pathfinder::Map;
+        use std::collections::HashSet;
+
+        let mut oxygenated = HashSet::new();
+        let mut edges: VecDeque<_> = self.map.locate(Tile::OxygenSystem).take(1).collect();
+        let mut duration = 0;
+
+        loop {
+            let mut new_edges = VecDeque::with_capacity(edges.len());
+            while let Some(edge) = edges.pop_front() {
+                // TODO: Maybe the droid needs to walk to this edge to explore it?
+                oxygenated.insert(edge);
+                for next_edge in Direction::all()
+                    .map(|d| edge.step(d))
+                    .filter(|e| !oxygenated.contains(e))
+                {
+                    if self.map.realized().is_traversable(next_edge) {
+                        new_edges.push_back(next_edge);
+                    } else if self.map.check(next_edge).is_none() {
+                        panic!("Map contains unexplored spaces")
+                    }
+                }
+            }
+            if new_edges.is_empty() {
+                break;
+            }
+            edges = new_edges;
+            duration += 1;
+        }
+
+        Ok(duration)
+    }
+
     fn droid(&self) -> &Droid {
         &self.droid
     }
@@ -337,6 +365,7 @@ impl fmt::Display for ShipSection {
                     }
                 }
             }
+            writeln!(f, "")?;
         }
         Ok(())
     }
@@ -389,6 +418,9 @@ pub(crate) fn main(input: Box<dyn Read + 'static>) -> ::std::result::Result<(), 
     let path = ship.find_path_to_tile(Tile::OxygenSystem)?;
     println!("Part 1: {} steps to the oxygen system", path.distance());
 
+    let duration = ship.time_to_oxygenate()?;
+    println!("Part 2: {} minutes to oxyngenate the system", duration);
+
     Ok(())
 }
 
@@ -421,6 +453,8 @@ mod test {
 
     impl MappedRoom {
         fn new(map: Map, start: Point) -> Self {
+            assert_eq!(map.check(start).unwrap(), Tile::Empty);
+
             Self {
                 map,
                 position: start,
@@ -475,11 +509,6 @@ mod test {
         let map: Map = "      \n   ## \n  #..#\n  D.# \n   #  ".parse().unwrap();
         assert_eq!(map.check(Point::origin()), None);
         assert_eq!(map.check((2, 2).into()), Some(Tile::Wall));
-
-        assert_eq!(
-            map.options((2, 3).into()),
-            vec![Direction::Left, Direction::Right, Direction::Down]
-        )
     }
 
     #[test]
@@ -517,10 +546,32 @@ mod test {
     }
 
     #[test]
-    fn answer_part1() {
+    fn answers() {
         let program = Program::read(get_default_input(15).unwrap()).unwrap();
         let mut ship = ShipSection::from_program(program.clone());
         let path = ship.find_path_to_tile(Tile::OxygenSystem).unwrap();
         assert_eq!(path.distance(), 282);
+        assert_eq!(ship.time_to_oxygenate().unwrap(), 286);
+    }
+
+    #[test]
+    fn example_part2() {
+        let map: Map = "
+######
+#..###
+#.#..#
+#.O.##
+######
+        "
+        .parse()
+        .unwrap();
+
+        let droid = Droid::new(MappedRoom::new(map.clone(), (1, 2).into()));
+        let mut ship = ShipSection::new(droid);
+        eprintln!("Finding path on {}", map);
+        let path = ship.find_path_to_tile(Tile::OxygenSystem).unwrap();
+        assert_eq!(path.distance(), 3);
+        eprintln!("Oxygenating {}", ship);
+        assert_eq!(ship.time_to_oxygenate().unwrap(), 4);
     }
 }
