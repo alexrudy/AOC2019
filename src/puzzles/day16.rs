@@ -82,7 +82,7 @@ impl Iterator for FlawedFrequencyTransform {
 }
 
 impl FlawedFrequencyTransform {
-    #[cfg(test)]
+    #[allow(dead_code)]
     fn new(signal: FlawedFrequencySignal) -> Self {
         FlawedFrequencyTransform {
             signal: signal.signal,
