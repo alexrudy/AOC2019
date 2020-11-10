@@ -47,6 +47,7 @@ lazy_static! {
             day!(14),
             day!(15),
             day!(16),
+            day!(17),
         ];
 
         for (d, func) in days.into_iter() {

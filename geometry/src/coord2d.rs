@@ -173,6 +173,15 @@ impl From<(Position, Position)> for Point {
     }
 }
 
+impl From<(usize, usize)> for Point {
+    fn from(coordinates: (usize, usize)) -> Self {
+        Self {
+            x: coordinates.0 as Position,
+            y: coordinates.1 as Position,
+        }
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum ParsePointError {
     #[error("Invalid Point: {}", _0)]
