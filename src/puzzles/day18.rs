@@ -211,11 +211,6 @@ impl<'m> Spelunker<'m> {
 
     fn location(&self) -> Result<Point, Error> {
         Ok(self.location)
-        // if self.paths.is_empty() {
-        //     self.caves.entrance().ok_or(anyhow!("No entrance!"))
-        // } else {
-        //     Ok(*self.paths.last().unwrap().destination())
-        // }
     }
 
     fn candidate_paths(&self) -> Result<Vec<pathfinder::Path>, Error> {
@@ -232,12 +227,6 @@ impl<'m> Spelunker<'m> {
     }
 
     fn candidates(&self) -> Result<Vec<Spelunker<'m>>, Error> {
-        // Ok(self
-        //     .candidate_paths()?
-        //     .into_iter()
-        //     .filter_map(|p| self.follow(p))
-        //     .collect())
-
         let location = self.location()?;
         let door = match self.caves.get(location) {
             Some(map::Tile::Key(c)) => Some(c),
@@ -261,74 +250,11 @@ impl<'m> Spelunker<'m> {
             .collect())
     }
 
-    // fn follow(&self, path: pathfinder::Path) -> Option<Self> {
-    //     let mut newsp = self.clone();
-    //     let mut gotkey = false;
-    //     for step in path.iter() {
-    //         match self.caves.get(*step) {
-    //             Some(map::Tile::Key(c)) => {
-    //                 if newsp.keys.insert(c) {
-    //                     if gotkey {
-    //                         return None;
-    //                     } else {
-    //                         gotkey = true;
-    //                     }
-    //                 }
-    //             }
-    //             Some(map::Tile::Door(c)) if !self.keys.contains(&c) => {
-    //                 panic!("Path goes through a locked door!")
-    //             }
-    //             Some(_) => {}
-    //             None => panic!("Path covers unreachable terrain!"),
-    //         }
-    //     }
-
-    //     newsp.distance = self.distance + path.distance();
-    //     newsp.paths.push(path);
-
-    //     Some(newsp)
-    // }
-
     fn distance(&self) -> usize {
         self.distance
     }
 
-    // fn states(&self) -> Vec<SpelunkState> {
-    //     let here = self.location().unwrap();
-    //     let tile = self.caves.get(here).unwrap();
-
-    //     let mut keys: Vec<String> = self
-    //         .keys
-    //         .iter()
-    //         .copied()
-    //         .filter(|k| map::Tile::Key(*k) != tile)
-    //         .map(|c| c.to_string())
-    //         .collect();
-    //     keys.sort();
-    //     let ks = keys.join(",");
-    //     let path = self.paths.last().unwrap();
-    //     path.iter()
-    //         .skip(1)
-    //         .map(|p| SpelunkState(ks.clone(), *p))
-    //         .collect()
-    // }
-
     fn keys(&self) -> KeyPath {
-        // let mut keys = Vec::new();
-        // let mut seen = HashSet::new();
-
-        // for path in &self.paths {
-        //     for step in path.iter() {
-        //         match self.caves.get(*step) {
-        //             Some(map::Tile::Key(c)) => {
-        //                 if seen.insert(c) {
-        //                     keys.push(c);
-        //                 }
-        //             }
-        //             _ => {}
-        //         };
-        //     }
-        // }
         KeyPath(self.path.clone())
     }
 }
