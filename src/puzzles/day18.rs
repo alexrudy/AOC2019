@@ -3,9 +3,12 @@ use anyhow::Error;
 use geometry::coord2d::pathfinder;
 use geometry::coord2d::Point;
 
-use std::cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd};
 use std::collections::{HashMap, HashSet};
 use std::io::Read;
+use std::{
+    cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd},
+    collections::VecDeque,
+};
 
 use crate::searcher::{bfs, djirkstra, SearchCandidate};
 
@@ -128,10 +131,24 @@ impl SpelunkGraph {
 }
 
 #[derive(Debug, Clone)]
+struct SpelunkJourney {
+    steps: VecDeque<Point>,
+    destination: char,
+}
+
+impl SpelunkJourney {
+    fn new(path: &pathfinder::Path, destination: char) -> Self {
+        let steps = path.iter().skip(1).copied().collect();
+        Self { steps, destination }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub(crate) struct Spelunker<'m> {
     caves: &'m map::Map,
     keys: HashSet<char>,
     path: Vec<char>,
+    current_path: Option<SpelunkJourney>,
     location: Point,
     distance: usize,
     cache: SpelunkGraph,
@@ -139,7 +156,7 @@ pub(crate) struct Spelunker<'m> {
 
 impl<'m> PartialEq for Spelunker<'m> {
     fn eq(&self, other: &Self) -> bool {
-        self.path.eq(&other.path)
+        self.path.eq(&other.path) && self.location.eq(&other.location)
     }
 }
 
@@ -215,6 +232,7 @@ impl<'m> Spelunker<'m> {
             caves: map,
             keys: HashSet::new(),
             path: Vec::new(),
+            current_path: None,
             location: map.entrance().unwrap(),
             distance: 0,
             cache: SpelunkGraph::build(map),
@@ -225,7 +243,29 @@ impl<'m> Spelunker<'m> {
         Ok(self.location)
     }
 
+    fn take_one_step(&mut self) -> () {
+        // Step along the path
+        self.location = self
+            .current_path
+            .as_mut()
+            .map(|p| p.steps.pop_front().unwrap())
+            .unwrap();
+        self.distance += 1;
+
+        // If we are done with the path, get rid of it!
+        if self.current_path.as_ref().unwrap().steps.is_empty() {
+            self.found_key(self.current_path.as_ref().unwrap().destination);
+            self.current_path = None;
+        }
+    }
+
     fn candidates(&self) -> Result<Vec<Spelunker<'m>>, Error> {
+        if self.current_path.is_some() {
+            let mut newsp = self.clone();
+            newsp.take_one_step();
+            return Ok(vec![newsp]);
+        }
+
         let location = self.location()?;
         let door = match self.caves.get(location) {
             Some(map::Tile::Key(c)) => Some(c),
@@ -240,13 +280,17 @@ impl<'m> Spelunker<'m> {
         Ok(edges.iter().map(|(c, p)| self.travel(*c, p)).collect())
     }
 
+    fn found_key(&mut self, key: char) {
+        self.keys.insert(key);
+        self.path.push(key);
+    }
+
     fn travel(&self, key: char, path: &pathfinder::Path) -> Self {
         // eprintln!("Moving to {}, distance {}", c, p.distance());
         let mut newsp = self.clone();
-        newsp.keys.insert(key);
-        newsp.path.push(key);
-        newsp.distance += path.distance();
-        newsp.location = *path.destination();
+
+        newsp.current_path = Some(SpelunkJourney::new(path, key));
+        newsp.take_one_step();
         newsp
     }
 
@@ -274,7 +318,7 @@ impl ToString for KeyPath {
 fn search<'m>(map: &'m map::Map) -> Result<Spelunker<'m>, Error> {
     let origin = Spelunker::new(map);
 
-    djirkstra(origin, Some(10_000))?.ok_or(anyhow!("No search result found!"))
+    bfs(origin)?.ok_or(anyhow!("No search result found!"))
 }
 
 mod map {
@@ -483,10 +527,10 @@ mod test {
         .parse()
         .unwrap();
 
-        assert!(search(&map).is_err());
+        // assert!(search(&map).is_err());
 
-        // let sp = search(&map).unwrap();
-        // assert_eq!(sp.distance(), 136);
+        let sp = search(&map).unwrap();
+        assert_eq!(sp.distance(), 136);
     }
 
     #[test]

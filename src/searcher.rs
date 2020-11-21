@@ -17,7 +17,7 @@ mod errors {
 }
 
 pub(crate) trait SearchCandidate: Ord + PartialOrd + Eq + Clone + Debug + Sized {
-    type State: Eq + Hash;
+    type State: Debug + Eq + Hash;
 
     fn is_complete(&self) -> bool;
 
@@ -355,8 +355,25 @@ where
     }
 
     fn run(&mut self) -> errors::Result<Option<&S>> {
+        let mut n = 0;
         while let Some(candidate) = self.queue.pop() {
-            if self.process_candidate(&candidate)? {
+            n += 1;
+
+            let will_process = self.process_candidate(&candidate)?;
+            if n % 10_000 == 0 {
+                eprintln!(
+                    "Q{} C{} R{} S{:?} ({:?} {} {})",
+                    self.queue.len(),
+                    self.cache.len(),
+                    self.results.len(),
+                    self.best().map(|p| p.score()),
+                    candidate.state(),
+                    candidate.score(),
+                    if will_process { "y" } else { "n" }
+                );
+            }
+
+            if will_process {
                 for child in candidate.children() {
                     self.queue.push(child);
                 }
