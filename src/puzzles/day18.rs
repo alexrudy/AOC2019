@@ -25,8 +25,47 @@ impl Key {
 pub(crate) struct SpelunkState(String, Point);
 
 #[derive(Debug, Clone, Default)]
+struct SpelunkEdge {
+    path: pathfinder::Path,
+    requirements: HashSet<char>,
+    intermediates: HashSet<char>,
+}
+
+impl SpelunkEdge {
+    fn new(path: pathfinder::Path, map: &map::Map) -> Self {
+        let mut requirements = HashSet::new();
+        let mut intermediates = HashSet::new();
+        for step in path.iter().skip(1) {
+            if step == path.destination() {
+                continue;
+            }
+
+            match map.get(*step) {
+                Some(map::Tile::Door(c)) => {
+                    requirements.insert(c);
+                }
+                Some(map::Tile::Key(c)) => {
+                    intermediates.insert(c);
+                }
+                _ => {}
+            }
+        }
+        return Self {
+            path,
+            requirements,
+            intermediates,
+        };
+    }
+
+    fn suitable(&self, keys: &HashSet<char>) -> bool {
+        self.requirements.iter().all(|k| keys.contains(k))
+            && self.intermediates.iter().all(|k| keys.contains(k))
+    }
+}
+
+#[derive(Debug, Clone, Default)]
 struct SpelunkGraph {
-    graph: HashMap<Option<char>, HashMap<char, (pathfinder::Path, HashSet<char>)>>,
+    graph: HashMap<Option<char>, HashMap<char, SpelunkEdge>>,
 }
 
 struct NoDoorMap<'m>(&'m map::Map);
@@ -49,21 +88,11 @@ impl SpelunkGraph {
         let entrance = map.entrance().unwrap();
         for first in &keys {
             if let Some(path) = pfm.path(entrance, first.location) {
-                let mut req = HashSet::new();
-                for step in path.iter().skip(1) {
-                    match map.get(*step) {
-                        Some(map::Tile::Door(c)) => {
-                            req.insert(c);
-                        }
-                        _ => {}
-                    }
-                }
-
                 graph
                     .graph
                     .entry(None)
                     .or_insert(HashMap::new())
-                    .insert(first.door, (path, req));
+                    .insert(first.door, SpelunkEdge::new(path, map));
             }
         }
 
@@ -73,21 +102,11 @@ impl SpelunkGraph {
                     continue;
                 }
                 if let Some(path) = pfm.path(start.location, end.location) {
-                    let mut req = HashSet::new();
-                    for step in path.iter().skip(1) {
-                        match map.get(*step) {
-                            Some(map::Tile::Door(c)) => {
-                                req.insert(c);
-                            }
-                            _ => {}
-                        }
-                    }
-
                     graph
                         .graph
                         .entry(Some(start.door))
                         .or_insert(HashMap::new())
-                        .insert(end.door, (path, req));
+                        .insert(end.door, SpelunkEdge::new(path, map));
                 }
             }
         }
@@ -99,9 +118,9 @@ impl SpelunkGraph {
 
     fn edges(&self, start: Option<Key>, keys: &HashSet<char>) -> HashMap<char, pathfinder::Path> {
         let mut results = HashMap::new();
-        for (end, (path, req)) in self.graph.get(&start.map(|k| k.door)).unwrap().iter() {
-            if req.iter().all(|k| keys.contains(k)) && !keys.contains(end) {
-                results.insert(*end, path.clone());
+        for (end, edge) in self.graph.get(&start.map(|k| k.door)).unwrap().iter() {
+            if !keys.contains(end) && edge.suitable(keys) {
+                results.insert(*end, edge.path.clone());
             }
         }
         results
@@ -213,19 +232,6 @@ impl<'m> Spelunker<'m> {
         Ok(self.location)
     }
 
-    fn candidate_paths(&self) -> Result<Vec<pathfinder::Path>, Error> {
-        use geometry::coord2d::pathfinder::Map;
-
-        let location = self.location()?;
-        Ok(self
-            .caves
-            .keys()
-            .iter()
-            .filter(|&k| !self.keys.contains(&k.door))
-            .filter_map(|k| self.path(location, k.location))
-            .collect())
-    }
-
     fn candidates(&self) -> Result<Vec<Spelunker<'m>>, Error> {
         let location = self.location()?;
         let door = match self.caves.get(location) {
@@ -238,16 +244,17 @@ impl<'m> Spelunker<'m> {
             .cache
             .edges(door.map(|c| Key::new(c, location)), &self.keys);
 
-        Ok(edges
-            .iter()
-            .map(|(c, p)| {
-                let mut newsp = self.clone();
-                newsp.keys.insert(*c);
-                newsp.path.push(*c);
-                newsp.distance += p.distance();
-                newsp
-            })
-            .collect())
+        Ok(edges.iter().map(|(c, p)| self.travel(*c, p)).collect())
+    }
+
+    fn travel(&self, key: char, path: &pathfinder::Path) -> Self {
+        // eprintln!("Moving to {}, distance {}", c, p.distance());
+        let mut newsp = self.clone();
+        newsp.keys.insert(key);
+        newsp.path.push(key);
+        newsp.distance += path.distance();
+        newsp.location = *path.destination();
+        newsp
     }
 
     fn distance(&self) -> usize {
@@ -426,12 +433,17 @@ mod test {
         let mut keys = sg.graph.keys().filter_map(|&c| c).collect::<Vec<char>>();
         keys.sort();
 
+        // Check the contents of the constructed graph
         assert_eq!(keys, vec!['a', 'b', 'c', 'd', 'e', 'f']);
-
         assert_eq!(sg.graph.get(&Some('a')).unwrap().len(), 5);
 
-        for (d, (_, r)) in sg.graph.get(&Some('a')).unwrap().iter() {
-            eprintln!("{} -> {} {:?}", 'a', d, r);
+        // Do the pairwise mappings make sense, with requrirements?
+        eprintln!("key -> destination requires intermediates");
+        for (d, edge) in sg.graph.get(&Some('a')).unwrap().iter() {
+            eprintln!(
+                "{} -> {} {:?} {:?}",
+                'a', d, edge.requirements, edge.intermediates
+            );
         }
 
         let mut keys = HashSet::new();
@@ -442,6 +454,7 @@ mod test {
 
         assert_eq!(edges.len(), 1);
         assert_eq!(edges.keys().next(), Some(&'b'));
+        assert_eq!(edges.values().next().map(|p| p.distance()).unwrap(), 6);
     }
 
     #[test]
