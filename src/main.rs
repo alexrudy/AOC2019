@@ -1,5 +1,6 @@
 #![feature(result_cloned)]
 #![feature(concat_idents)]
+#![feature(map_into_keys_values)]
 #![deny(clippy::all)]
 
 use clap::{value_t, App, Arg};
@@ -15,6 +16,7 @@ use std::io;
 
 mod iterhelper;
 mod puzzles;
+mod searcher;
 
 type Error = anyhow::Error;
 type Actor = Box<dyn (Fn(Box<dyn std::io::Read>) -> Result<(), Error>) + Send + Sync + 'static>;
@@ -48,6 +50,7 @@ lazy_static! {
             day!(15),
             day!(16),
             day!(17),
+            day!(18),
         ];
 
         for (d, func) in days.into_iter() {
