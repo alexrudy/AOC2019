@@ -362,14 +362,15 @@ where
             let will_process = self.process_candidate(&candidate)?;
             if n % 10_000 == 0 {
                 eprintln!(
-                    "Q{} C{} R{} S{:?} ({:?} {} {})",
+                    "Q{} C{} R{} S{:?} ({:?} {} {}) {}",
                     self.queue.len(),
                     self.cache.len(),
                     self.results.len(),
                     self.best().map(|p| p.score()),
                     candidate.state(),
                     candidate.score(),
-                    if will_process { "y" } else { "n" }
+                    if will_process { "y" } else { "n" },
+                    n
                 );
             }
 

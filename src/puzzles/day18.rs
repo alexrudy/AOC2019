@@ -1,16 +1,13 @@
 use anyhow::anyhow;
 use anyhow::Error;
 use geometry::coord2d::pathfinder;
-use geometry::coord2d::Point;
+use geometry::coord2d::{Direction, Point};
 
-use std::collections::{HashMap, HashSet};
+use std::cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd};
+use std::collections::HashSet;
 use std::io::Read;
-use std::{
-    cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd},
-    collections::VecDeque,
-};
 
-use crate::searcher::{bfs, djirkstra, SearchCandidate};
+use crate::searcher::{self, SearchCandidate};
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub(crate) struct Key {
@@ -27,131 +24,13 @@ impl Key {
 #[derive(Debug, Eq, PartialEq, Hash, Clone)]
 pub(crate) struct SpelunkState(String, Point);
 
-#[derive(Debug, Clone, Default)]
-struct SpelunkEdge {
-    path: pathfinder::Path,
-    requirements: HashSet<char>,
-    intermediates: HashSet<char>,
-}
-
-impl SpelunkEdge {
-    fn new(path: pathfinder::Path, map: &map::Map) -> Self {
-        let mut requirements = HashSet::new();
-        let mut intermediates = HashSet::new();
-        for step in path.iter().skip(1) {
-            if step == path.destination() {
-                continue;
-            }
-
-            match map.get(*step) {
-                Some(map::Tile::Door(c)) => {
-                    requirements.insert(c);
-                }
-                Some(map::Tile::Key(c)) => {
-                    intermediates.insert(c);
-                }
-                _ => {}
-            }
-        }
-        return Self {
-            path,
-            requirements,
-            intermediates,
-        };
-    }
-
-    fn suitable(&self, keys: &HashSet<char>) -> bool {
-        self.requirements.iter().all(|k| keys.contains(k))
-            && self.intermediates.iter().all(|k| keys.contains(k))
-    }
-}
-
-#[derive(Debug, Clone, Default)]
-struct SpelunkGraph {
-    graph: HashMap<Option<char>, HashMap<char, SpelunkEdge>>,
-}
-
-struct NoDoorMap<'m>(&'m map::Map);
-
-impl<'m> pathfinder::Map for NoDoorMap<'m> {
-    fn is_traversable(&self, location: Point) -> bool {
-        self.0.get(location).is_some()
-    }
-}
-
-impl SpelunkGraph {
-    fn build(map: &map::Map) -> Self {
-        use geometry::coord2d::pathfinder::Map;
-
-        let mut graph = Self::default();
-        let pfm = NoDoorMap(map);
-
-        let keys = map.keys();
-
-        let entrance = map.entrance().unwrap();
-        for first in &keys {
-            if let Some(path) = pfm.path(entrance, first.location) {
-                graph
-                    .graph
-                    .entry(None)
-                    .or_insert(HashMap::new())
-                    .insert(first.door, SpelunkEdge::new(path, map));
-            }
-        }
-
-        for start in &keys {
-            for end in &keys {
-                if start == end {
-                    continue;
-                }
-                if let Some(path) = pfm.path(start.location, end.location) {
-                    graph
-                        .graph
-                        .entry(Some(start.door))
-                        .or_insert(HashMap::new())
-                        .insert(end.door, SpelunkEdge::new(path, map));
-                }
-            }
-        }
-
-        let n: usize = graph.graph.values().map(|v| v.len()).sum();
-        eprintln!("Built graph with {} elements", n);
-        graph
-    }
-
-    fn edges(&self, start: Option<Key>, keys: &HashSet<char>) -> HashMap<char, pathfinder::Path> {
-        let mut results = HashMap::new();
-        for (end, edge) in self.graph.get(&start.map(|k| k.door)).unwrap().iter() {
-            if !keys.contains(end) && edge.suitable(keys) {
-                results.insert(*end, edge.path.clone());
-            }
-        }
-        results
-    }
-}
-
-#[derive(Debug, Clone)]
-struct SpelunkJourney {
-    steps: VecDeque<Point>,
-    destination: char,
-}
-
-impl SpelunkJourney {
-    fn new(path: &pathfinder::Path, destination: char) -> Self {
-        let steps = path.iter().skip(1).copied().collect();
-        Self { steps, destination }
-    }
-}
-
 #[derive(Debug, Clone)]
 pub(crate) struct Spelunker<'m> {
     caves: &'m map::Map,
     keys: HashSet<char>,
     path: Vec<char>,
-    current_path: Option<SpelunkJourney>,
     location: Point,
     distance: usize,
-    cache: SpelunkGraph,
 }
 
 impl<'m> PartialEq for Spelunker<'m> {
@@ -232,10 +111,8 @@ impl<'m> Spelunker<'m> {
             caves: map,
             keys: HashSet::new(),
             path: Vec::new(),
-            current_path: None,
             location: map.entrance().unwrap(),
             distance: 0,
-            cache: SpelunkGraph::build(map),
         }
     }
 
@@ -243,55 +120,50 @@ impl<'m> Spelunker<'m> {
         Ok(self.location)
     }
 
-    fn take_one_step(&mut self) -> () {
-        // Step along the path
-        self.location = self
-            .current_path
-            .as_mut()
-            .map(|p| p.steps.pop_front().unwrap())
-            .unwrap();
-        self.distance += 1;
-
-        // If we are done with the path, get rid of it!
-        if self.current_path.as_ref().unwrap().steps.is_empty() {
-            self.found_key(self.current_path.as_ref().unwrap().destination);
-            self.current_path = None;
-        }
-    }
-
     fn candidates(&self) -> Result<Vec<Spelunker<'m>>, Error> {
-        if self.current_path.is_some() {
-            let mut newsp = self.clone();
-            newsp.take_one_step();
-            return Ok(vec![newsp]);
+        let mut candidates = Vec::with_capacity(4);
+
+        for direction in Direction::all() {
+            let target = self.location.step(direction);
+            match self.caves.get(target) {
+                Some(map::Tile::Key(c)) => {
+                    let mut newsp = self.clone();
+                    newsp.found_key(c);
+                    newsp.location = target;
+                    newsp.distance += 1;
+                    candidates.push(newsp);
+                }
+                Some(map::Tile::Door(c)) => {
+                    if self.keys.contains(&c) {
+                        let mut newsp = self.clone();
+                        newsp.location = target;
+                        newsp.distance += 1;
+                        candidates.push(newsp);
+                    }
+                }
+                Some(map::Tile::Entrance) => {
+                    let mut newsp = self.clone();
+                    newsp.location = target;
+                    newsp.distance += 1;
+                    candidates.push(newsp);
+                }
+                Some(map::Tile::Hall) => {
+                    let mut newsp = self.clone();
+                    newsp.location = target;
+                    newsp.distance += 1;
+                    candidates.push(newsp);
+                }
+                None => {}
+            }
         }
 
-        let location = self.location()?;
-        let door = match self.caves.get(location) {
-            Some(map::Tile::Key(c)) => Some(c),
-            Some(map::Tile::Entrance) => None,
-            _ => Err(anyhow!("Didn't start on a key!"))?,
-        };
-
-        let edges = self
-            .cache
-            .edges(door.map(|c| Key::new(c, location)), &self.keys);
-
-        Ok(edges.iter().map(|(c, p)| self.travel(*c, p)).collect())
+        Ok(candidates)
     }
 
     fn found_key(&mut self, key: char) {
-        self.keys.insert(key);
-        self.path.push(key);
-    }
-
-    fn travel(&self, key: char, path: &pathfinder::Path) -> Self {
-        // eprintln!("Moving to {}, distance {}", c, p.distance());
-        let mut newsp = self.clone();
-
-        newsp.current_path = Some(SpelunkJourney::new(path, key));
-        newsp.take_one_step();
-        newsp
+        if self.keys.insert(key) {
+            self.path.push(key);
+        }
     }
 
     fn distance(&self) -> usize {
@@ -318,7 +190,7 @@ impl ToString for KeyPath {
 fn search<'m>(map: &'m map::Map) -> Result<Spelunker<'m>, Error> {
     let origin = Spelunker::new(map);
 
-    bfs(origin)?.ok_or(anyhow!("No search result found!"))
+    searcher::bfs(origin)?.ok_or(anyhow!("No search result found!"))
 }
 
 mod map {
@@ -435,47 +307,6 @@ mod test {
         let sp = search(&map).unwrap();
         assert_eq!(sp.distance(), 8);
         assert_eq!(sp.keys().to_string(), "a,b");
-    }
-
-    #[test]
-    fn graph() {
-        let map: map::Map = "
-        ########################
-        #f.D.E.e.C.b.A.@.a.B.c.#
-        ######################.#
-        #d.....................#
-        ########################
-        "
-        .parse()
-        .unwrap();
-
-        let sg = SpelunkGraph::build(&map);
-
-        let mut keys = sg.graph.keys().filter_map(|&c| c).collect::<Vec<char>>();
-        keys.sort();
-
-        // Check the contents of the constructed graph
-        assert_eq!(keys, vec!['a', 'b', 'c', 'd', 'e', 'f']);
-        assert_eq!(sg.graph.get(&Some('a')).unwrap().len(), 5);
-
-        // Do the pairwise mappings make sense, with requrirements?
-        eprintln!("key -> destination requires intermediates");
-        for (d, edge) in sg.graph.get(&Some('a')).unwrap().iter() {
-            eprintln!(
-                "{} -> {} {:?} {:?}",
-                'a', d, edge.requirements, edge.intermediates
-            );
-        }
-
-        let mut keys = HashSet::new();
-        keys.insert('a');
-        let edges = sg.edges(Some(Key::new('a', (17, 1).into())), &keys);
-
-        eprintln!("{:?}", edges.keys().collect::<Vec<_>>());
-
-        assert_eq!(edges.len(), 1);
-        assert_eq!(edges.keys().next(), Some(&'b'));
-        assert_eq!(edges.values().next().map(|p| p.distance()).unwrap(), 6);
     }
 
     #[test]
