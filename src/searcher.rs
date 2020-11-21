@@ -343,7 +343,7 @@ where
         // (a)
         let cached_score = self.cache.entry(state).or_insert(usize::MAX);
 
-        if *cached_score >= score {
+        if *cached_score > score {
             // (c)
             *cached_score = score;
         } else {
