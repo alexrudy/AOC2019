@@ -4,6 +4,18 @@ use std::default::Default;
 use std::fmt::Debug;
 use std::hash::Hash;
 
+mod errors {
+    use thiserror::Error;
+
+    #[derive(Debug, Error)]
+    pub enum SearchError {
+        #[error("Step limit exhausted after {0} steps")]
+        StepLimitExhausted(usize),
+    }
+
+    pub type Result<T> = std::result::Result<T, SearchError>;
+}
+
 pub(crate) trait SearchCandidate: Ord + PartialOrd + Eq + Clone + Debug + Sized {
     type State: Eq + Hash;
 
@@ -235,6 +247,31 @@ where
     }
 }
 
+#[derive(Debug)]
+struct StepLimit {
+    current: usize,
+    maximum: usize,
+}
+
+impl StepLimit {
+    fn new(limit: usize) -> Self {
+        Self {
+            current: 0,
+            maximum: limit,
+        }
+    }
+
+    fn increment(&mut self) -> errors::Result<()> {
+        self.current += 1;
+
+        if self.current >= self.maximum {
+            Err(errors::SearchError::StepLimitExhausted(self.current))
+        } else {
+            Ok(())
+        }
+    }
+}
+
 #[derive(Debug, Default)]
 struct Searcher<S, Q>
 where
@@ -244,6 +281,7 @@ where
     cache: HashMap<S::State, usize>,
     queue: Q,
     results: BinaryHeap<SearchResult<S>>,
+    counter: Option<StepLimit>,
 }
 
 impl<S, Q> Searcher<S, Q>
@@ -256,29 +294,40 @@ where
             cache: HashMap::default(),
             queue: Q::default(),
             results: BinaryHeap::default(),
+            counter: None,
         };
         sr.queue.push(origin);
         sr
+    }
+
+    fn set_limit(&mut self, limit: usize) {
+        self.counter = Some(StepLimit::new(limit))
     }
 
     fn best(&self) -> Option<&S> {
         self.results.peek().map(|s| &s.candidate)
     }
 
-    fn process_candidate(&mut self, candidate: &S) -> bool {
+    fn process_candidate(&mut self, candidate: &S) -> errors::Result<bool> {
+        // Increment the step counter
+        self.counter
+            .as_mut()
+            .map(|c| c.increment())
+            .unwrap_or(Ok(()))?;
+
         // If we found an answer, we can stop hunting now
         // and add the answer to our search results.
 
         if candidate.is_complete() {
             self.results.push(SearchResult::new(candidate.clone()));
-            return false;
+            return Ok(false);
         }
 
         // Scores can only increase in searches, if the best candidate
         // is better than our current guess, give up now.
         let score = candidate.score();
         if score > self.best().map(|s| s.score()).unwrap_or(usize::MAX) {
-            return false;
+            return Ok(false);
         }
 
         // Check if we have already seen this state in our cache.
@@ -298,36 +347,40 @@ where
             *cached_score = score;
         } else {
             // (b)
-            return false;
+            return Ok(false);
         }
 
-        return true;
+        return Ok(true);
     }
 
-    fn run(&mut self) -> Option<&S> {
+    fn run(&mut self) -> errors::Result<Option<&S>> {
         while let Some(candidate) = self.queue.pop() {
-            if self.process_candidate(&candidate) {
+            if self.process_candidate(&candidate)? {
                 for child in candidate.children() {
                     self.queue.push(child);
                 }
             }
         }
-        self.best()
+        Ok(self.best())
     }
 }
 
-pub(crate) fn bfs<S>(origin: S) -> Option<S>
+pub(crate) fn bfs<S>(origin: S) -> errors::Result<Option<S>>
 where
     S: SearchCandidate,
 {
     let mut searcher: Searcher<S, BreadthQueue<S>> = Searcher::new(origin);
-    searcher.run().cloned()
+    Ok(searcher.run()?.cloned())
 }
 
-pub(crate) fn djirkstra<S>(origin: S) -> Option<S>
+pub(crate) fn djirkstra<S>(origin: S, limit: Option<usize>) -> errors::Result<Option<S>>
 where
     S: SearchCandidate,
 {
     let mut searcher: Searcher<S, DjirkstraQueue<S>> = Searcher::new(origin);
-    searcher.run().cloned()
+    if let Some(l) = limit {
+        searcher.set_limit(l);
+    }
+
+    Ok(searcher.run()?.cloned())
 }
