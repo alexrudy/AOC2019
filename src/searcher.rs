@@ -308,6 +308,7 @@ where
         self.results.peek().map(|s| &s.candidate)
     }
 
+    // Should we continue searching from this candidate?
     fn process_candidate(&mut self, candidate: &S) -> errors::Result<bool> {
         // Increment the step counter
         self.counter
@@ -342,7 +343,7 @@ where
         // (a)
         let cached_score = self.cache.entry(state).or_insert(usize::MAX);
 
-        if *cached_score > score {
+        if *cached_score >= score {
             // (c)
             *cached_score = score;
         } else {
