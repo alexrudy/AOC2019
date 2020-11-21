@@ -4,12 +4,13 @@ use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::convert::{From, Into};
 use std::fmt;
+use std::ops::Deref;
 
 use super::{Direction, Point};
 
 #[derive(Debug, Clone, Default, Eq, PartialEq)]
 pub struct Path {
-    steps: VecDeque<Point>,
+    steps: Vec<Point>,
 }
 
 impl From<Vec<Point>> for Path {
@@ -23,14 +24,14 @@ impl From<Vec<Point>> for Path {
 
 impl Path {
     pub fn new(origin: Point) -> Self {
-        let mut steps = VecDeque::with_capacity(1);
-        steps.push_back(origin);
+        let mut steps = Vec::with_capacity(1);
+        steps.push(origin);
         Path { steps }
     }
 
     pub fn step(&self, direction: Direction) -> Self {
         let mut steps = self.steps.clone();
-        steps.push_back(self.destination().step(direction));
+        steps.push(self.destination().step(direction));
         Path { steps: steps }
     }
 
@@ -39,15 +40,23 @@ impl Path {
     }
 
     pub fn origin(&self) -> &Point {
-        self.steps.front().unwrap()
+        self.steps.first().unwrap()
     }
 
     pub fn destination(&self) -> &Point {
-        self.steps.back().unwrap()
+        self.steps.last().unwrap()
     }
 
     pub fn distance(&self) -> usize {
         self.steps.len() - 1
+    }
+}
+
+impl Deref for Path {
+    type Target = [Point];
+
+    fn deref(&self) -> &Self::Target {
+        &self.steps
     }
 }
 
