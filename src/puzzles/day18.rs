@@ -78,7 +78,7 @@ impl<'m> pathfinder::Map for NoDoorMap<'m> {
 
 impl SpelunkGraph {
     fn build(map: &map::Map) -> Self {
-        use geometry::coord2d::pathfinder::{Map, Pathfinder};
+        use geometry::coord2d::pathfinder::Map;
 
         let mut graph = Self::default();
         let pfm = NoDoorMap(map);
@@ -165,7 +165,6 @@ impl<'m> SearchCandidate for Spelunker<'m> {
     }
 
     fn heuristic(&self) -> usize {
-        let entrance = self.caves.entrance().unwrap();
         let here = self.location().unwrap();
 
         self.caves
@@ -176,12 +175,6 @@ impl<'m> SearchCandidate for Spelunker<'m> {
                     None
                 } else {
                     let h = k.location.manhattan_distance(here) * 2;
-                    // let e = k.location.manhattan_distance(entrance) * 2;
-                    // if h > e {
-                    // Some(e)
-                    // } else {
-                    // Some(h)
-                    // }
                     Some(h)
                 }
             })
@@ -302,15 +295,6 @@ mod map {
         Key(char),
     }
 
-    impl Tile {
-        fn is_key(&self) -> bool {
-            match self {
-                Tile::Key(_) => true,
-                _ => false,
-            }
-        }
-    }
-
     impl TryFrom<char> for Tile {
         type Error = Error;
 
@@ -371,13 +355,6 @@ mod map {
         pub(crate) fn entrance(&self) -> Option<Point> {
             self.tiles.iter().find_map(|(p, t)| match t {
                 Tile::Entrance => Some(*p),
-                _ => None,
-            })
-        }
-
-        pub(crate) fn key(&self, door: char) -> Option<Point> {
-            self.tiles.iter().find_map(|(p, t)| match t {
-                Tile::Key(c) if *c == door => Some(*p),
                 _ => None,
             })
         }
