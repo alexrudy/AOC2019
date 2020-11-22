@@ -16,7 +16,6 @@ use std::io;
 
 mod iterhelper;
 mod puzzles;
-mod searcher;
 
 type Error = anyhow::Error;
 type Actor = Box<dyn (Fn(Box<dyn std::io::Read>) -> Result<(), Error>) + Send + Sync + 'static>;

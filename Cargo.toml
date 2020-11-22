@@ -13,6 +13,7 @@ thiserror = "*"
 intcode = { path = "intcode" }
 geometry = { path = "geometry" }
 breakout = { path = "breakout" }
+searcher = { path = "searcher" }
 anyhow = "*"
 permutohedron = "0.2.4"
 paste = "*"

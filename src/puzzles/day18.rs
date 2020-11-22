@@ -1,13 +1,12 @@
-use anyhow::anyhow;
 use anyhow::Error;
 use geometry::coord2d::pathfinder;
 use geometry::coord2d::{Direction, Point};
 
+use std::cell::Cell;
 use std::cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd};
-use std::collections::HashSet;
 use std::io::Read;
 
-use crate::searcher::{self, SearchCandidate};
+use searcher::{self, SearchCandidate, SearchHeuristic};
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub(crate) struct Key {
@@ -21,16 +20,25 @@ impl Key {
     }
 }
 
+struct NoDoorMap<'m>(&'m map::Map);
+
+impl<'m> pathfinder::Map for NoDoorMap<'m> {
+    fn is_traversable(&self, location: Point) -> bool {
+        self.0.get(location).is_some()
+    }
+}
+
 #[derive(Debug, Eq, PartialEq, Hash, Clone)]
 pub(crate) struct SpelunkState(String, Point);
 
 #[derive(Debug, Clone)]
 pub(crate) struct Spelunker<'m> {
     caves: &'m map::Map,
-    keys: HashSet<char>,
+    keys: map::KeyRing,
     path: Vec<char>,
     location: Point,
     distance: usize,
+    heuristic: Cell<Option<usize>>,
 }
 
 impl<'m> PartialEq for Spelunker<'m> {
@@ -60,30 +68,8 @@ impl<'m> SearchCandidate for Spelunker<'m> {
         self.keys.len() == self.caves.keys().len()
     }
 
-    fn heuristic(&self) -> usize {
-        let here = self.location().unwrap();
-
-        self.caves
-            .keys()
-            .iter()
-            .filter_map(|k| {
-                if self.keys.contains(&k.door) {
-                    None
-                } else {
-                    let h = k.location.manhattan_distance(here) * 2;
-                    Some(h)
-                }
-            })
-            .sum::<i32>() as usize
-            + self.distance()
-    }
-
     fn state(&self) -> SpelunkState {
-        let mut keys: Vec<char> = self.keys.iter().copied().collect();
-        keys.sort();
-        let ks: String = keys.iter().collect();
-
-        SpelunkState(ks, self.location().unwrap())
+        SpelunkState(self.keys.state(), self.location().unwrap())
     }
 
     fn score(&self) -> usize {
@@ -92,6 +78,33 @@ impl<'m> SearchCandidate for Spelunker<'m> {
 
     fn children(&self) -> Vec<Self> {
         self.candidates().unwrap()
+    }
+}
+
+impl<'m> SearchHeuristic for Spelunker<'m> {
+    fn heuristic(&self) -> usize {
+        if let Some(h) = self.heuristic.get() {
+            return h;
+        }
+
+        use pathfinder::Map;
+        let mut here = self.location().unwrap();
+        let mut h = 0;
+
+        for key in self.caves.keys() {
+            if self.keys.contains(&key.door) {
+                continue;
+            }
+
+            let p = NoDoorMap(self.caves).path(here, key.location).unwrap();
+            h += p.distance();
+            here = *p.destination();
+        }
+
+        let total_heuristic = h + self.distance();
+
+        self.heuristic.set(Some(total_heuristic));
+        total_heuristic
     }
 }
 
@@ -109,10 +122,11 @@ impl<'m> Spelunker<'m> {
     fn new(map: &'m map::Map) -> Self {
         Self {
             caves: map,
-            keys: HashSet::new(),
+            keys: map::KeyRing::default(),
             path: Vec::new(),
             location: map.entrance().unwrap(),
             distance: 0,
+            heuristic: Cell::new(None),
         }
     }
 
@@ -125,6 +139,7 @@ impl<'m> Spelunker<'m> {
 
         for direction in Direction::all() {
             let target = self.location.step(direction);
+
             match self.caves.get(target) {
                 Some(map::Tile::Key(c)) => {
                     let mut newsp = self.clone();
@@ -190,7 +205,7 @@ impl ToString for KeyPath {
 fn search<'m>(map: &'m map::Map) -> Result<Spelunker<'m>, Error> {
     let origin = Spelunker::new(map);
 
-    searcher::bfs(origin)?.ok_or(anyhow!("No search result found!"))
+    Ok(searcher::djirkstra(origin).run()?)
 }
 
 mod map {
@@ -228,7 +243,29 @@ mod map {
         }
     }
 
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Default, Clone, Eq, PartialEq)]
+    pub(crate) struct KeyRing(HashSet<char>);
+
+    impl KeyRing {
+        pub(crate) fn insert(&mut self, key: char) -> bool {
+            self.0.insert(key)
+        }
+
+        pub(crate) fn contains(&self, key: &char) -> bool {
+            self.0.contains(key)
+        }
+
+        pub(crate) fn state(&self) -> String {
+            let mut keys: Vec<&char> = self.0.iter().collect();
+            keys.sort();
+            keys.into_iter().collect()
+        }
+
+        pub(crate) fn len(&self) -> usize {
+            self.0.len()
+        }
+    }
+    #[derive(Debug, Clone, Default)]
     pub(crate) struct Map {
         tiles: HashMap<Point, Tile>,
     }
@@ -249,11 +286,18 @@ mod map {
                 }
             }
 
-            Ok(Map { tiles })
+            Ok(Map::new(tiles))
         }
     }
 
     impl Map {
+        fn new(tiles: HashMap<Point, Tile>) -> Self {
+            Map {
+                tiles,
+                ..Map::default()
+            }
+        }
+
         pub(crate) fn keys(&self) -> HashSet<Key> {
             self.tiles
                 .iter()
