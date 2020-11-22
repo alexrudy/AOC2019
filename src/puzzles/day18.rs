@@ -209,7 +209,7 @@ impl ToString for KeyPath {
 fn search<'m>(map: &'m map::Map) -> Result<Spelunker<'m>, Error> {
     let origin = Spelunker::new(map);
 
-    Ok(searcher::djirkstra(origin).run()?)
+    Ok(searcher::bfs(origin).run()?)
 }
 
 mod map {
