@@ -21,3 +21,9 @@ regex = "1"
 num = "*"
 
 [workspace]
+members = [
+    "breakout",
+    "geometry",
+    "intcode",
+    "searcher",
+]
