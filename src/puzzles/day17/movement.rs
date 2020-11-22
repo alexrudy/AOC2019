@@ -275,6 +275,7 @@ impl MovementPrograms {
         None
     }
 
+    #[allow(dead_code)]
     pub fn expand(&self) -> MovementProgram {
         let mut result = Vec::new();
 
