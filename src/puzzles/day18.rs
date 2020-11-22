@@ -5,6 +5,7 @@ use geometry::coord2d::{Direction, Point};
 use std::cell::Cell;
 use std::cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd};
 use std::io::Read;
+use std::time;
 
 use searcher::{self, SearchCandidate, SearchHeuristic};
 
@@ -328,9 +329,12 @@ pub(crate) fn main(mut input: Box<dyn Read + 'static>) -> ::std::result::Result<
         buf.parse()?
     };
 
+    let start = time::Instant::now();
+
     let sp = search(&map)?;
     println!("Part 1: {}", sp.distance());
     println!("  Keys: {}", sp.keys().to_string());
+    println!("  Time: {}s", start.elapsed().as_secs());
 
     Ok(())
 }
