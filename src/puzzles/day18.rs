@@ -273,38 +273,19 @@ mod map {
     }
 
     #[derive(Debug, Clone, Default)]
-    struct DeadendCache(HashMap<String, HashSet<Point>>);
+    struct DeadendCache(HashSet<Point>);
 
     impl DeadendCache {
-        fn inherit(&mut self, keys: &KeyRing) {
-            let mut initial = HashSet::new();
-            for (state, deadends) in self.0.iter() {
-                let keystate: HashSet<char> = state.chars().collect();
-                if keys.0.is_superset(&keystate) {
-                    for loc in deadends {
-                        initial.insert(*loc);
-                    }
-                }
-            }
-            self.0.insert(keys.state(), initial);
-        }
-
         fn warmed(&self, keys: &KeyRing) -> bool {
-            self.0.contains_key(&keys.state())
+            !self.0.is_empty()
         }
 
         fn contains(&self, location: &Point, keys: &KeyRing) -> bool {
-            self.0
-                .get(&keys.state())
-                .map(|d| d.contains(location))
-                .unwrap_or(false)
+            self.0.contains(location)
         }
 
         fn insert(&mut self, location: &Point, keys: &KeyRing) -> bool {
-            self.0
-                .entry(keys.state())
-                .or_insert(HashSet::new())
-                .insert(*location)
+            self.0.insert(*location)
         }
     }
 
@@ -344,7 +325,7 @@ mod map {
         fn is_traversable(&self, location: Point) -> bool {
             location != self.origin
                 && match self.map.get(location) {
-                    Some(Tile::Door(ref c)) => self.keys.contains(c),
+                    // Some(Tile::Door(ref c)) => self.keys.contains(c),
                     Some(_) => true,
                     None => false,
                 }
