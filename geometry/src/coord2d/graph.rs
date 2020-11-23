@@ -162,10 +162,15 @@ where
         graph
     }
 
+    /// Iterate through the edges of a graph which connect to this node.
     pub fn edges(&self, location: Point) -> impl Iterator<Item = (&Point, &Path)> {
         self.nodes.get(&location).unwrap().iter()
     }
 
+    /// Find a path within the graph.
+    ///
+    /// Returns None when no path can be found, or when origin or destination
+    /// are not nodes in the graph.
     pub fn find_path(&self, origin: Point, destination: Point) -> Option<Path> {
         // Chech that start and endpoints are nodes.
         // TODO: Could dynamically add nodes to the graph as new options appear?
@@ -174,7 +179,7 @@ where
         }
 
         let c = graphsearch::GraphPathCandidate::start(origin, &destination, &self);
-        dijkstra(c).run().ok().map(|c| self.expand_path(&c.path))
+        dijkstra(c).ok().map(|c| self.expand_path(&c.path))
     }
 
     fn expand_path(&self, graphpath: &graphsearch::GraphPath) -> Path {

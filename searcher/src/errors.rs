@@ -1,5 +1,6 @@
 use thiserror::Error;
 
+/// Error produced when a search fails.
 #[derive(Debug, Error)]
 pub enum SearchError {
     #[error("No search result found")]

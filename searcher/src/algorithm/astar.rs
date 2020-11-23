@@ -6,6 +6,7 @@ use std::fmt::Debug;
 use super::cache::BasicCache;
 use super::SearchAlgorithm;
 use crate::algorithm::SearchQueue;
+use crate::errors::Result;
 use crate::traits::{SearchCacher, SearchHeuristic};
 
 #[derive(Debug)]
@@ -86,11 +87,22 @@ where
     }
 }
 
-pub type AStarSearcher<S> = SearchAlgorithm<S, AStarQueue<S>, BasicCache<S>>;
+type AStarSearcher<S> = SearchAlgorithm<S, AStarQueue<S>, BasicCache<S>>;
 
-pub fn astar<S>(origin: S) -> AStarSearcher<S>
+fn build<S>(origin: S) -> AStarSearcher<S>
 where
     S: SearchHeuristic + SearchCacher,
 {
     SearchAlgorithm::new(origin)
+}
+
+/// Perform a search using the A* algorithm, which leverages a heuristic provided by [SearchHeuristic].
+///
+/// A* always considers the next candidate to be the one with the lowest
+/// estimated score, as provided by the heuristic.
+pub fn astar<S>(origin: S) -> Result<S>
+where
+    S: SearchHeuristic + SearchCacher,
+{
+    build(origin).run()
 }

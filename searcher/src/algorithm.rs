@@ -1,3 +1,5 @@
+//! Provides the building blocks for search algorithms
+
 use std::cmp::{Ord, Ordering, PartialOrd};
 use std::collections::BinaryHeap;
 use std::default::Default;
@@ -97,6 +99,10 @@ impl StepLimit {
     }
 }
 
+/// Implementation of search, using generic components.
+///
+/// Uses a generic queue (Q) and a generic cache (C) to provide
+/// a single foundation for multiple search algorithms.
 #[derive(Debug, Default)]
 pub struct SearchAlgorithm<S, Q, C>
 where
@@ -126,6 +132,11 @@ where
         sr.queue.push(origin);
         sr
     }
+
+    /// Set a step limit for this search algorithm.
+    ///
+    /// When this many candidates have been explored,
+    /// the search algorithm will retun an error.
     pub fn set_limit(&mut self, limit: usize) {
         self.counter = Some(StepLimit::new(limit))
     }
@@ -162,6 +173,7 @@ where
         Ok(None)
     }
 
+    /// Run the search to completion.
     pub fn run(mut self) -> Result<S> {
         let mut n = 0;
         while let Some(candidate) = self.queue.pop() {

@@ -88,14 +88,16 @@ where
         Self { map }
     }
 
-    /// Find a path between the origin point given and an enemy.
+    /// Find a path between the origin and destination given.
+    ///
+    /// When no path exists and the search is exhausted, return None.
     pub fn find_path(&self, origin: Point, destination: Point) -> Option<Path> {
         if !self.map.is_traversable(origin) {
             return None;
         }
         let start = PathCandidate::start(origin, self.map, &destination);
 
-        dijkstra(start).run().ok().map(|c| c.path)
+        dijkstra(start).ok().map(|c| c.path)
     }
 }
 

@@ -1,85 +1,113 @@
-use std::collections::VecDeque;
-use std::default::Default;
-use std::fmt::Debug;
+pub use bfs::bfs;
+pub use dfs::dfs;
 
-use crate::algorithm::SearchQueue;
-use crate::traits::SearchCandidate;
+mod bfs {
+    use std::collections::VecDeque;
+    use std::default::Default;
 
-use super::cache::NoCache;
-use super::SearchAlgorithm;
+    use crate::algorithm::cache::NoCache;
+    use crate::algorithm::{SearchAlgorithm, SearchQueue};
+    use crate::errors::Result;
+    use crate::SearchCandidate;
 
-#[derive(Debug)]
-pub struct BreadthQueue<S> {
-    queue: VecDeque<S>,
-}
-
-impl<S> SearchQueue for BreadthQueue<S> {
-    type Candidate = S;
-
-    fn pop(&mut self) -> Option<Self::Candidate> {
-        self.queue.pop_front()
+    #[derive(Debug)]
+    pub struct BreadthQueue<S> {
+        queue: VecDeque<S>,
     }
 
-    fn push(&mut self, item: Self::Candidate) {
-        self.queue.push_back(item);
-    }
+    impl<S> SearchQueue for BreadthQueue<S> {
+        type Candidate = S;
 
-    fn len(&self) -> usize {
-        self.queue.len()
-    }
-}
+        fn pop(&mut self) -> Option<Self::Candidate> {
+            self.queue.pop_front()
+        }
 
-impl<S> Default for BreadthQueue<S> {
-    fn default() -> Self {
-        BreadthQueue {
-            queue: VecDeque::new(),
+        fn push(&mut self, item: Self::Candidate) {
+            self.queue.push_back(item);
+        }
+
+        fn len(&self) -> usize {
+            self.queue.len()
         }
     }
-}
 
-#[derive(Debug)]
-pub struct DepthQueue<S> {
-    queue: VecDeque<S>,
-}
-
-impl<S> Default for DepthQueue<S> {
-    fn default() -> Self {
-        DepthQueue {
-            queue: VecDeque::new(),
+    impl<S> Default for BreadthQueue<S> {
+        fn default() -> Self {
+            BreadthQueue {
+                queue: VecDeque::new(),
+            }
         }
     }
-}
+    type BreadthFirstSearcher<S> = SearchAlgorithm<S, BreadthQueue<S>, NoCache<S>>;
 
-impl<S> SearchQueue for DepthQueue<S> {
-    type Candidate = S;
-
-    fn pop(&mut self) -> Option<Self::Candidate> {
-        self.queue.pop_front()
+    fn build<S>(origin: S) -> BreadthFirstSearcher<S>
+    where
+        S: SearchCandidate,
+    {
+        SearchAlgorithm::new(origin)
     }
 
-    fn push(&mut self, item: Self::Candidate) {
-        self.queue.push_front(item);
-    }
-
-    fn len(&self) -> usize {
-        self.queue.len()
+    /// Breadth-first search, where the order is determined
+    /// by the candidates returned by the [SearchCandidate::children] method.
+    pub fn bfs<S>(origin: S) -> Result<S>
+    where
+        S: SearchCandidate,
+    {
+        build(origin).run()
     }
 }
 
-pub type BreadthFirstSearcher<S> = SearchAlgorithm<S, BreadthQueue<S>, NoCache<S>>;
+mod dfs {
+    use std::collections::VecDeque;
+    use std::default::Default;
 
-pub fn bfs<S>(origin: S) -> BreadthFirstSearcher<S>
-where
-    S: SearchCandidate,
-{
-    SearchAlgorithm::new(origin)
-}
+    use crate::algorithm::cache::NoCache;
+    use crate::algorithm::{SearchAlgorithm, SearchQueue};
+    use crate::errors::Result;
+    use crate::SearchCandidate;
+    #[derive(Debug)]
+    pub struct DepthQueue<S> {
+        queue: VecDeque<S>,
+    }
 
-pub type DepthFirstSearcher<S> = SearchAlgorithm<S, DepthQueue<S>, NoCache<S>>;
+    impl<S> Default for DepthQueue<S> {
+        fn default() -> Self {
+            DepthQueue {
+                queue: VecDeque::new(),
+            }
+        }
+    }
 
-pub fn dfs<S>(origin: S) -> DepthFirstSearcher<S>
-where
-    S: SearchCandidate,
-{
-    SearchAlgorithm::new(origin)
+    impl<S> SearchQueue for DepthQueue<S> {
+        type Candidate = S;
+
+        fn pop(&mut self) -> Option<Self::Candidate> {
+            self.queue.pop_front()
+        }
+
+        fn push(&mut self, item: Self::Candidate) {
+            self.queue.push_front(item);
+        }
+
+        fn len(&self) -> usize {
+            self.queue.len()
+        }
+    }
+
+    pub type DepthFirstSearcher<S> = SearchAlgorithm<S, DepthQueue<S>, NoCache<S>>;
+    pub fn build<S>(origin: S) -> DepthFirstSearcher<S>
+    where
+        S: SearchCandidate,
+    {
+        SearchAlgorithm::new(origin)
+    }
+
+    /// Depth-first search, where the order is determined
+    /// by the candidates returned by the [SearchCandidate::children] method.
+    pub fn dfs<S>(origin: S) -> Result<S>
+    where
+        S: SearchCandidate,
+    {
+        build(origin).run()
+    }
 }

@@ -199,7 +199,7 @@ fn search<'m>(map: &'m map::Map) -> Result<SpelunkPath, Error> {
     let graph = map.graph(map.entrance().ok_or(anyhow!("No entrance?"))?);
     let origin = Spelunker::new(map, &graph);
 
-    Ok(searcher::dijkstra(origin).run()?).map(|c| c.path)
+    Ok(searcher::dijkstra(origin).map(|c| c.path)?)
 }
 
 mod map {

@@ -5,6 +5,7 @@ use std::fmt::Debug;
 
 use super::{cache::BasicCache, SearchAlgorithm};
 use crate::algorithm::SearchQueue;
+use crate::errors::Result;
 use crate::traits::{SearchCacher, SearchCandidate};
 
 #[derive(Debug)]
@@ -84,9 +85,22 @@ where
 
 pub type DijkstraSearch<S> = SearchAlgorithm<S, DijkstraQueue<S>, BasicCache<S>>;
 
-pub fn dijkstra<S>(origin: S) -> SearchAlgorithm<S, DijkstraQueue<S>, BasicCache<S>>
+pub fn build<S>(origin: S) -> DijkstraSearch<S>
 where
     S: SearchCandidate + SearchCacher,
 {
     SearchAlgorithm::new(origin)
+}
+
+/// Perform a search using Dijkstra's algorithm.
+///
+/// Dijkstra's algorithm behaves like a breadth first search, but always
+/// searches the next shortest path even when paths end up with varying
+/// lenghts. To be optimal, Dijkstra's algorithm requires that it remember
+/// the states observed, hence the SearchCacher constraint.
+pub fn dijkstra<S>(origin: S) -> Result<S>
+where
+    S: SearchCandidate + SearchCacher,
+{
+    build(origin).run()
 }
