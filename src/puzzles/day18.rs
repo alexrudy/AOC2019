@@ -3,7 +3,7 @@ use geometry::coord2d::pathfinder;
 use geometry::coord2d::{Direction, Point};
 
 use std::cell::Cell;
-use std::cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd};
+use std::cmp::{Eq, PartialEq};
 use std::io::Read;
 use std::time;
 
@@ -41,26 +41,6 @@ pub(crate) struct Spelunker<'m> {
     location: Point,
     distance: usize,
     heuristic: Cell<Option<usize>>,
-}
-
-impl<'m> PartialEq for Spelunker<'m> {
-    fn eq(&self, other: &Self) -> bool {
-        self.path.eq(&other.path) && self.location.eq(&other.location)
-    }
-}
-
-impl<'m> Eq for Spelunker<'m> {}
-
-impl<'m> Ord for Spelunker<'m> {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.distance().cmp(&other.distance()).reverse()
-    }
-}
-
-impl<'m> PartialOrd for Spelunker<'m> {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
 }
 
 impl<'m> SearchCandidate for Spelunker<'m> {
