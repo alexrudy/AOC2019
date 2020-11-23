@@ -8,10 +8,14 @@ use super::{Direction, Point};
 
 pub trait Graphable: Map {
     fn is_node(&self, point: &Point) -> bool {
-        let options = Direction::all()
-            .filter(|d| self.is_traversable(point.step(*d)))
-            .count();
+        let options = self.movement_options(point);
         options == 1 || options > 2
+    }
+
+    fn movement_options(&self, point: &Point) -> usize {
+        Direction::all()
+            .filter(|d| self.is_traversable(point.step(*d)))
+            .count()
     }
 
     fn graph(&self, origin: Point) -> Graph<Self> {
@@ -78,11 +82,11 @@ impl<'m, M> Graph<'m, M>
 where
     M: Graphable,
 {
-    fn contains(&self, point: &Point) -> bool {
+    pub fn contains(&self, point: &Point) -> bool {
         self.nodes.contains_key(point)
     }
 
-    fn edge(&mut self, path: &Path) {
+    fn add_edge(&mut self, path: &Path) {
         self.nodes
             .entry(*path.origin())
             .or_insert(HashMap::new())
@@ -123,7 +127,7 @@ where
         while let Some(path) = queue.pop() {
             if map.is_node(&path.destination()) && path.distance() > 0 {
                 // We've found a node, stick an edge in both directions.
-                graph.edge(&path);
+                graph.add_edge(&path);
 
                 if !visited.insert(*path.destination()) {
                     continue;
@@ -156,6 +160,10 @@ where
         }
 
         graph
+    }
+
+    pub fn edges(&self, location: Point) -> impl Iterator<Item = (&Point, &Path)> {
+        self.nodes.get(&location).unwrap().iter()
     }
 
     pub fn find_path(&self, origin: Point, destination: Point) -> Option<Path> {

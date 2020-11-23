@@ -1,6 +1,7 @@
-use anyhow::Error;
+use anyhow::{anyhow, Error};
+use geometry::coord2d::graph;
 use geometry::coord2d::pathfinder;
-use geometry::coord2d::{Direction, Point};
+use geometry::coord2d::Point;
 
 use std::cell::Cell;
 use std::cmp::{Eq, PartialEq};
@@ -34,129 +35,21 @@ impl<'m> pathfinder::Map for NoDoorMap<'m> {
 pub(crate) struct SpelunkState(String, Point);
 
 #[derive(Debug, Clone)]
-pub(crate) struct Spelunker<'m> {
-    caves: &'m map::Map,
+pub(crate) struct SpelunkPath {
     keys: map::KeyRing,
     path: Vec<char>,
     location: Point,
     distance: usize,
-    heuristic: Cell<Option<usize>>,
 }
 
-impl<'m> SearchCandidate for Spelunker<'m> {
-    fn is_complete(&self) -> bool {
-        self.keys.len() == self.caves.keys().len()
-    }
-
-    fn score(&self) -> usize {
-        self.distance()
-    }
-
-    fn children(&self) -> Vec<Self> {
-        self.candidates().unwrap()
-    }
-}
-
-impl<'m> SearchCacher for Spelunker<'m> {
-    type State = SpelunkState;
-
-    fn state(&self) -> SpelunkState {
-        SpelunkState(self.keys.state(), self.location().unwrap())
-    }
-}
-
-impl<'m> SearchHeuristic for Spelunker<'m> {
-    fn heuristic(&self) -> usize {
-        if let Some(h) = self.heuristic.get() {
-            return h;
-        }
-
-        use pathfinder::Map;
-        let mut here = self.location().unwrap();
-        let mut h = 0;
-
-        for key in self.caves.keys() {
-            if self.keys.contains(&key.door) {
-                continue;
-            }
-
-            let p = NoDoorMap(self.caves).path(here, key.location).unwrap();
-            h += p.distance();
-            here = *p.destination();
-        }
-
-        let total_heuristic = h + self.distance();
-
-        self.heuristic.set(Some(total_heuristic));
-        total_heuristic
-    }
-}
-
-impl<'m> pathfinder::Map for Spelunker<'m> {
-    fn is_traversable(&self, location: Point) -> bool {
-        match self.caves.get(location) {
-            Some(map::Tile::Door(c)) => self.keys.contains(&c),
-            Some(_) => true,
-            None => false,
-        }
-    }
-}
-
-impl<'m> Spelunker<'m> {
-    fn new(map: &'m map::Map) -> Self {
+impl SpelunkPath {
+    fn start(origin: Point) -> Self {
         Self {
-            caves: map,
             keys: map::KeyRing::default(),
             path: Vec::new(),
-            location: map.entrance().unwrap(),
+            location: origin,
             distance: 0,
-            heuristic: Cell::new(None),
         }
-    }
-
-    fn location(&self) -> Result<Point, Error> {
-        Ok(self.location)
-    }
-
-    fn candidates(&self) -> Result<Vec<Spelunker<'m>>, Error> {
-        let mut candidates = Vec::with_capacity(4);
-
-        for direction in Direction::all() {
-            let target = self.location.step(direction);
-
-            match self.caves.get(target) {
-                Some(map::Tile::Key(c)) => {
-                    let mut newsp = self.clone();
-                    newsp.found_key(c);
-                    newsp.location = target;
-                    newsp.distance += 1;
-                    candidates.push(newsp);
-                }
-                Some(map::Tile::Door(c)) => {
-                    if self.keys.contains(&c) {
-                        let mut newsp = self.clone();
-                        newsp.location = target;
-                        newsp.distance += 1;
-                        candidates.push(newsp);
-                    }
-                }
-                Some(map::Tile::Entrance) => {
-                    let mut newsp = self.clone();
-                    newsp.location = target;
-                    newsp.distance += 1;
-                    candidates.push(newsp);
-                }
-                Some(map::Tile::Hall) => {
-                    let mut newsp = self.clone();
-                    newsp.location = target;
-                    newsp.distance += 1;
-                    candidates.push(newsp);
-                }
-                None => {}
-            }
-        }
-
-        Ok(candidates)
     }
 
     fn found_key(&mut self, key: char) {
@@ -174,6 +67,120 @@ impl<'m> Spelunker<'m> {
     }
 }
 
+#[derive(Debug, Clone)]
+pub(crate) struct Spelunker<'m> {
+    caves: &'m map::Map,
+    graph: &'m graph::Graph<'m, map::Map>,
+    path: SpelunkPath,
+    heuristic: Cell<Option<usize>>,
+}
+
+impl<'m> SearchCandidate for Spelunker<'m> {
+    fn is_complete(&self) -> bool {
+        self.path.keys.len() == self.caves.keys().len()
+    }
+
+    fn score(&self) -> usize {
+        self.distance()
+    }
+
+    fn children(&self) -> Vec<Self> {
+        self.candidates().unwrap()
+    }
+}
+
+impl<'m> SearchCacher for Spelunker<'m> {
+    type State = SpelunkState;
+
+    fn state(&self) -> SpelunkState {
+        SpelunkState(self.path.keys.state(), self.location().unwrap())
+    }
+}
+
+impl<'m> SearchHeuristic for Spelunker<'m> {
+    fn heuristic(&self) -> usize {
+        if let Some(h) = self.heuristic.get() {
+            return h;
+        }
+
+        use pathfinder::Map;
+        let mut here = self.location().unwrap();
+        let mut h = 0;
+
+        for key in self.caves.keys() {
+            if self.path.keys.contains(&key.door) {
+                continue;
+            }
+
+            let p = NoDoorMap(self.caves).path(here, key.location).unwrap();
+            h += p.distance();
+            here = *p.destination();
+        }
+
+        let total_heuristic = h + self.distance();
+
+        self.heuristic.set(Some(total_heuristic));
+        total_heuristic
+    }
+}
+
+impl<'m> Spelunker<'m> {
+    fn new(map: &'m map::Map, graph: &'m graph::Graph<'m, map::Map>) -> Self {
+        Self {
+            caves: map,
+            graph: graph,
+            path: SpelunkPath::start(map.entrance().unwrap()),
+            heuristic: Cell::new(None),
+        }
+    }
+
+    fn location(&self) -> Result<Point, Error> {
+        Ok(self.path.location)
+    }
+
+    fn candidates(&self) -> Result<Vec<Spelunker<'m>>, Error> {
+        let mut candidates = Vec::with_capacity(4);
+
+        for (point, path) in self.graph.edges(self.location()?) {
+            match self.caves.get(*point) {
+                Some(map::Tile::Key(c)) => {
+                    let mut newsp = self.clone();
+                    newsp.path.found_key(c);
+                    newsp.path.location = *point;
+                    newsp.path.distance += path.distance();
+                    candidates.push(newsp);
+                }
+                Some(map::Tile::Door(c)) if self.path.keys.contains(&c) => {
+                    let mut newsp = self.clone();
+                    newsp.path.location = *point;
+                    newsp.path.distance += path.distance();
+                    candidates.push(newsp);
+                }
+                Some(map::Tile::Entrance) => {
+                    let mut newsp = self.clone();
+                    newsp.path.location = *point;
+                    newsp.path.distance += path.distance();
+                    candidates.push(newsp);
+                }
+                Some(map::Tile::Door(_)) => {}
+                Some(map::Tile::Hall) => {
+                    let mut newsp = self.clone();
+                    newsp.path.location = *point;
+                    newsp.path.distance += path.distance();
+                    candidates.push(newsp);
+                }
+                None => {}
+            }
+        }
+
+        Ok(candidates)
+    }
+
+    fn distance(&self) -> usize {
+        self.path.distance
+    }
+}
+
 struct KeyPath(Vec<char>);
 
 impl ToString for KeyPath {
@@ -186,15 +193,21 @@ impl ToString for KeyPath {
     }
 }
 
-fn search<'m>(map: &'m map::Map) -> Result<Spelunker<'m>, Error> {
-    let origin = Spelunker::new(map);
+fn search<'m>(map: &'m map::Map) -> Result<SpelunkPath, Error> {
+    use geometry::coord2d::graph::Graphable;
 
-    Ok(searcher::dijkstra(origin).run()?)
+    let graph = map.graph(map.entrance().ok_or(anyhow!("No entrance?"))?);
+    let origin = Spelunker::new(map, &graph);
+
+    Ok(searcher::dijkstra(origin).run()?).map(|c| c.path)
 }
 
 mod map {
     use anyhow::{anyhow, Error};
     use geometry::coord2d::Point;
+
+    use geometry::coord2d::graph;
+    use geometry::coord2d::pathfinder;
 
     use std::collections::{HashMap, HashSet};
     use std::convert::{TryFrom, TryInto};
@@ -302,6 +315,28 @@ mod map {
                 Tile::Entrance => Some(*p),
                 _ => None,
             })
+        }
+    }
+
+    impl graph::Graphable for Map {
+        fn is_node(&self, point: &Point) -> bool {
+            let options = self.movement_options(point);
+            match self.get(*point) {
+                Some(Tile::Door(_)) => true,
+                Some(Tile::Key(_)) => true,
+                Some(Tile::Entrance) => true,
+                Some(Tile::Hall) => options == 1 || options > 2,
+                None => false,
+            }
+        }
+    }
+
+    impl pathfinder::Map for Map {
+        fn is_traversable(&self, location: Point) -> bool {
+            match self.get(location) {
+                Some(_) => true,
+                None => false,
+            }
         }
     }
 }
