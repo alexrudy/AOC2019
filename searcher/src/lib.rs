@@ -11,4 +11,4 @@ pub use traits::SearchHeuristic;
 pub use algorithm::astar::{astar, AStarSearcher};
 pub use algorithm::basic::{bfs, BreadthFirstSearcher};
 pub use algorithm::basic::{dfs, DepthFirstSearcher};
-pub use algorithm::dijkstra::{djirkstra, DijkstraSearch};
+pub use algorithm::dijkstra::{dijkstra, DijkstraSearch};

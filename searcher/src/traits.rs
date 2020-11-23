@@ -1,8 +1,7 @@
-use std::cmp::{Ord, PartialOrd};
 use std::fmt::Debug;
 use std::hash::Hash;
 
-pub trait SearchCandidate: Ord + PartialOrd + Eq + Clone + Debug + Sized {
+pub trait SearchCandidate: Debug + Sized {
     fn is_complete(&self) -> bool;
 
     fn score(&self) -> usize;

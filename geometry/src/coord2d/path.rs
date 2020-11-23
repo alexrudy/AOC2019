@@ -25,6 +25,12 @@ impl Path {
         Path { steps }
     }
 
+    pub fn reversed(&self) -> Self {
+        let mut steps = self.steps.clone();
+        steps.reverse();
+        Path { steps: steps }
+    }
+
     pub fn step(&self, direction: Direction) -> Self {
         let mut steps = self.steps.clone();
         steps.push(self.destination().step(direction));

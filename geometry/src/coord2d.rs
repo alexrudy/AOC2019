@@ -12,6 +12,8 @@ use thiserror::Error;
 
 use crate::Position;
 
+mod graph;
+mod map;
 pub mod path;
 pub mod pathfinder;
 

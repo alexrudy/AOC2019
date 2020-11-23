@@ -1,4 +1,4 @@
-use std::cmp::{Ord, Ordering, PartialOrd};
+use std::cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd};
 use std::collections::BinaryHeap;
 use std::default::Default;
 use std::fmt::Debug;
@@ -7,10 +7,24 @@ use super::{cache::BasicCache, SearchAlgorithm};
 use crate::algorithm::SearchQueue;
 use crate::traits::{SearchCacher, SearchCandidate};
 
-#[derive(Debug, Eq, PartialEq)]
-pub struct DjirkstraElement<S> {
+#[derive(Debug)]
+pub struct DjirkstraElement<S>
+where
+    S: SearchCandidate,
+{
     element: S,
 }
+
+impl<S> PartialEq for DjirkstraElement<S>
+where
+    S: SearchCandidate,
+{
+    fn eq(&self, other: &Self) -> bool {
+        self.element.score().eq(&other.element.score())
+    }
+}
+
+impl<S> Eq for DjirkstraElement<S> where S: SearchCandidate {}
 
 impl<S> Ord for DjirkstraElement<S>
 where
@@ -70,7 +84,7 @@ where
 
 pub type DijkstraSearch<S> = SearchAlgorithm<S, DijkstraQueue<S>, BasicCache<S>>;
 
-pub fn djirkstra<S>(origin: S) -> SearchAlgorithm<S, DijkstraQueue<S>, BasicCache<S>>
+pub fn dijkstra<S>(origin: S) -> SearchAlgorithm<S, DijkstraQueue<S>, BasicCache<S>>
 where
     S: SearchCandidate + SearchCacher,
 {

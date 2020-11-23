@@ -1,4 +1,4 @@
-use std::cmp::{Ord, Ordering, PartialOrd};
+use std::cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd};
 use std::collections::BinaryHeap;
 use std::default::Default;
 use std::fmt::Debug;
@@ -8,13 +8,24 @@ use super::SearchAlgorithm;
 use crate::algorithm::SearchQueue;
 use crate::traits::{SearchCacher, SearchHeuristic};
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug)]
 struct Heuristic<S>
 where
-    S: Eq,
+    S: SearchHeuristic,
 {
     candidate: S,
 }
+
+impl<S> PartialEq for Heuristic<S>
+where
+    S: SearchHeuristic,
+{
+    fn eq(&self, other: &Self) -> bool {
+        self.candidate.heuristic().eq(&other.candidate.heuristic())
+    }
+}
+
+impl<S> Eq for Heuristic<S> where S: SearchHeuristic {}
 
 impl<S> Ord for Heuristic<S>
 where

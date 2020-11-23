@@ -23,7 +23,7 @@ pub trait SearchQueue {
     fn len(&self) -> usize;
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug)]
 struct Score<S>
 where
     S: SearchCandidate,
@@ -39,6 +39,17 @@ where
         Self { candidate }
     }
 }
+
+impl<S> PartialEq for Score<S>
+where
+    S: SearchCandidate,
+{
+    fn eq(&self, other: &Self) -> bool {
+        self.candidate.score().eq(&other.candidate.score())
+    }
+}
+
+impl<S> Eq for Score<S> where S: SearchCandidate {}
 
 impl<S> Ord for Score<S>
 where
@@ -124,7 +135,7 @@ where
     }
 
     // Should we continue searching from this candidate?
-    fn process_candidate(&mut self, candidate: &S) -> Result<bool> {
+    fn process_candidate(&mut self, candidate: S) -> Result<Option<S>> {
         // Increment the step counter
         self.counter
             .as_mut()
@@ -134,18 +145,21 @@ where
         // If we found an answer, we can stop hunting now
         // and add the answer to our search results.
         if candidate.is_complete() {
-            self.results.push(Score::new(candidate.clone()));
-            return Ok(false);
+            self.results.push(Score::new(candidate));
+            return Ok(None);
         }
 
         // Scores can only increase in searches, if the best candidate
         // is better than our current guess, give up now.
         let score = candidate.score();
         if score > self.best().map(|s| s.score()).unwrap_or(usize::MAX) {
-            return Ok(false);
+            return Ok(None);
         }
 
-        self.cache.check(candidate)
+        if self.cache.check(&candidate)? {
+            return Ok(Some(candidate));
+        }
+        Ok(None)
     }
 
     pub fn run(mut self) -> Result<S> {
@@ -153,25 +167,29 @@ where
         while let Some(candidate) = self.queue.pop() {
             n += 1;
 
-            let will_process = self.process_candidate(&candidate)?;
+            let score = candidate.score();
+            let will_process = self.process_candidate(candidate)?;
             if n % 10_000 == 0 {
                 eprintln!(
                     "Q{} R{} S{:?} ({} {}) {}",
                     self.queue.len(),
                     self.results.len(),
                     self.best().map(|p| p.score()),
-                    candidate.score(),
-                    if will_process { "y" } else { "n" },
+                    score,
+                    if will_process.is_some() { "y" } else { "n" },
                     n
                 );
             }
 
-            if will_process {
+            if let Some(candidate) = will_process {
                 for child in candidate.children() {
                     self.queue.push(child);
                 }
             }
         }
-        self.best().cloned().ok_or(SearchError::NoResultFound)
+        self.results
+            .pop()
+            .map(|s| s.candidate)
+            .ok_or(SearchError::NoResultFound)
     }
 }
