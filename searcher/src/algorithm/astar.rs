@@ -3,9 +3,10 @@ use std::collections::BinaryHeap;
 use std::default::Default;
 use std::fmt::Debug;
 
+use super::cache::BasicCache;
 use super::SearchAlgorithm;
 use crate::algorithm::SearchQueue;
-use crate::traits::SearchHeuristic;
+use crate::traits::{SearchCacher, SearchHeuristic};
 
 #[derive(Debug, Eq, PartialEq)]
 struct Heuristic<S>
@@ -74,11 +75,11 @@ where
     }
 }
 
-pub type AStarSearcher<S> = SearchAlgorithm<S, AStarQueue<S>>;
+pub type AStarSearcher<S> = SearchAlgorithm<S, AStarQueue<S>, BasicCache<S>>;
 
 pub fn astar<S>(origin: S) -> AStarSearcher<S>
 where
-    S: SearchHeuristic,
+    S: SearchHeuristic + SearchCacher,
 {
     SearchAlgorithm::new(origin)
 }

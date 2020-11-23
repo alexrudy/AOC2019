@@ -3,9 +3,9 @@ use std::collections::BinaryHeap;
 use std::default::Default;
 use std::fmt::Debug;
 
-use super::SearchAlgorithm;
+use super::{cache::BasicCache, SearchAlgorithm};
 use crate::algorithm::SearchQueue;
-use crate::traits::SearchCandidate;
+use crate::traits::{SearchCacher, SearchCandidate};
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct DjirkstraElement<S> {
@@ -68,11 +68,11 @@ where
     }
 }
 
-pub type DijkstraSearch<S> = SearchAlgorithm<S, DijkstraQueue<S>>;
+pub type DijkstraSearch<S> = SearchAlgorithm<S, DijkstraQueue<S>, BasicCache<S>>;
 
-pub fn djirkstra<S>(origin: S) -> DijkstraSearch<S>
+pub fn djirkstra<S>(origin: S) -> SearchAlgorithm<S, DijkstraQueue<S>, BasicCache<S>>
 where
-    S: SearchCandidate,
+    S: SearchCandidate + SearchCacher,
 {
     SearchAlgorithm::new(origin)
 }

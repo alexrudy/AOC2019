@@ -3,11 +3,7 @@ use std::fmt::Debug;
 use std::hash::Hash;
 
 pub trait SearchCandidate: Ord + PartialOrd + Eq + Clone + Debug + Sized {
-    type State: Debug + Eq + Hash;
-
     fn is_complete(&self) -> bool;
-
-    fn state(&self) -> Self::State;
 
     fn score(&self) -> usize;
 
@@ -19,4 +15,10 @@ pub trait SearchHeuristic: SearchCandidate {
     fn heuristic(&self) -> usize {
         self.score()
     }
+}
+
+pub trait SearchCacher: SearchCandidate {
+    type State: Debug + Eq + Hash;
+
+    fn state(&self) -> Self::State;
 }

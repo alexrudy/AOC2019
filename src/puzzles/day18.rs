@@ -7,7 +7,7 @@ use std::cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd};
 use std::io::Read;
 use std::time;
 
-use searcher::{self, SearchCandidate, SearchHeuristic};
+use searcher::{self, SearchCacher, SearchCandidate, SearchHeuristic};
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub(crate) struct Key {
@@ -63,14 +63,8 @@ impl<'m> PartialOrd for Spelunker<'m> {
 }
 
 impl<'m> SearchCandidate for Spelunker<'m> {
-    type State = SpelunkState;
-
     fn is_complete(&self) -> bool {
         self.keys.len() == self.caves.keys().len()
-    }
-
-    fn state(&self) -> SpelunkState {
-        SpelunkState(self.keys.state(), self.location().unwrap())
     }
 
     fn score(&self) -> usize {
@@ -79,6 +73,14 @@ impl<'m> SearchCandidate for Spelunker<'m> {
 
     fn children(&self) -> Vec<Self> {
         self.candidates().unwrap()
+    }
+}
+
+impl<'m> SearchCacher for Spelunker<'m> {
+    type State = SpelunkState;
+
+    fn state(&self) -> SpelunkState {
+        SpelunkState(self.keys.state(), self.location().unwrap())
     }
 }
 
@@ -209,7 +211,7 @@ impl ToString for KeyPath {
 fn search<'m>(map: &'m map::Map) -> Result<Spelunker<'m>, Error> {
     let origin = Spelunker::new(map);
 
-    Ok(searcher::bfs(origin).run()?)
+    Ok(searcher::djirkstra(origin).run()?)
 }
 
 mod map {

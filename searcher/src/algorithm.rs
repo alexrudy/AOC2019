@@ -1,12 +1,14 @@
 use std::cmp::{Ord, Ordering, PartialOrd};
-use std::collections::{BinaryHeap, HashMap};
+use std::collections::BinaryHeap;
 use std::default::Default;
 
+use self::cache::Cache;
 use crate::errors::{Result, SearchError};
 use crate::traits::SearchCandidate;
 
 pub(crate) mod astar;
 pub(crate) mod basic;
+pub(crate) mod cache;
 pub(crate) mod dijkstra;
 
 /// Trait used to implement queues of search candidates
@@ -85,25 +87,27 @@ impl StepLimit {
 }
 
 #[derive(Debug, Default)]
-pub struct SearchAlgorithm<S, Q>
+pub struct SearchAlgorithm<S, Q, C>
 where
     S: SearchCandidate,
     Q: SearchQueue<Candidate = S> + Default,
+    C: Cache<Candidate = S>,
 {
-    cache: HashMap<S::State, usize>,
+    cache: C,
     queue: Q,
     results: BinaryHeap<Score<S>>,
     counter: Option<StepLimit>,
 }
 
-impl<S, Q> SearchAlgorithm<S, Q>
+impl<S, Q, C> SearchAlgorithm<S, Q, C>
 where
     S: SearchCandidate,
     Q: SearchQueue<Candidate = S> + Default,
+    C: Cache<Candidate = S>,
 {
     fn new(origin: S) -> Self {
         let mut sr = SearchAlgorithm {
-            cache: HashMap::default(),
+            cache: C::default(),
             queue: Q::default(),
             results: BinaryHeap::default(),
             counter: None,
@@ -111,7 +115,6 @@ where
         sr.queue.push(origin);
         sr
     }
-
     pub fn set_limit(&mut self, limit: usize) {
         self.counter = Some(StepLimit::new(limit))
     }
@@ -130,7 +133,6 @@ where
 
         // If we found an answer, we can stop hunting now
         // and add the answer to our search results.
-
         if candidate.is_complete() {
             self.results.push(Score::new(candidate.clone()));
             return Ok(false);
@@ -143,27 +145,7 @@ where
             return Ok(false);
         }
 
-        // Check if we have already seen this state in our cache.
-        // (a) For states which are not in the cache, add them.
-        // (b) If the state is already in the cache, and has a lower score,
-        //     we should ignore this candidate.
-        // (c) For states which are already in the cache but have a higher
-        //     score, mark this state as the new winner.
-
-        let state = candidate.state();
-
-        // (a)
-        let cached_score = self.cache.entry(state).or_insert(usize::MAX);
-
-        if *cached_score > score {
-            // (c)
-            *cached_score = score;
-        } else {
-            // (b)
-            return Ok(false);
-        }
-
-        return Ok(true);
+        self.cache.check(candidate)
     }
 
     pub fn run(mut self) -> Result<S> {
@@ -174,12 +156,10 @@ where
             let will_process = self.process_candidate(&candidate)?;
             if n % 10_000 == 0 {
                 eprintln!(
-                    "Q{} C{} R{} S{:?} ({:?} {} {}) {}",
+                    "Q{} R{} S{:?} ({} {}) {}",
                     self.queue.len(),
-                    self.cache.len(),
                     self.results.len(),
                     self.best().map(|p| p.score()),
-                    candidate.state(),
                     candidate.score(),
                     if will_process { "y" } else { "n" },
                     n

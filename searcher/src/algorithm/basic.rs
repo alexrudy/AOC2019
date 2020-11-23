@@ -5,6 +5,7 @@ use std::fmt::Debug;
 use crate::algorithm::SearchQueue;
 use crate::traits::SearchCandidate;
 
+use super::cache::NoCache;
 use super::SearchAlgorithm;
 
 #[derive(Debug)]
@@ -65,7 +66,7 @@ impl<S> SearchQueue for DepthQueue<S> {
     }
 }
 
-pub type BreadthFirstSearcher<S> = SearchAlgorithm<S, BreadthQueue<S>>;
+pub type BreadthFirstSearcher<S> = SearchAlgorithm<S, BreadthQueue<S>, NoCache<S>>;
 
 pub fn bfs<S>(origin: S) -> BreadthFirstSearcher<S>
 where
@@ -74,7 +75,7 @@ where
     SearchAlgorithm::new(origin)
 }
 
-pub type DepthFirstSearcher<S> = SearchAlgorithm<S, DepthQueue<S>>;
+pub type DepthFirstSearcher<S> = SearchAlgorithm<S, DepthQueue<S>, NoCache<S>>;
 
 pub fn dfs<S>(origin: S) -> DepthFirstSearcher<S>
 where

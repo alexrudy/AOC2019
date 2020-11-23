@@ -4,6 +4,7 @@ mod traits;
 
 pub use errors::Result as SearchResult;
 pub use errors::SearchError;
+pub use traits::SearchCacher;
 pub use traits::SearchCandidate;
 pub use traits::SearchHeuristic;
 
