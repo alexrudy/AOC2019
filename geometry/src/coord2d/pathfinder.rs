@@ -1,67 +1,16 @@
 //! Moudle for pathfinding in two dimensions
-use std::cell::RefCell;
-use std::collections::hash_map::Entry;
-use std::collections::{HashMap, HashSet, VecDeque};
-use std::convert::{From, Into};
+use std::clone::Clone;
+use std::cmp::{Ord, Ordering, PartialEq, PartialOrd};
+use std::convert::From;
 use std::fmt;
-use std::ops::Deref;
 
+use searcher::{djirkstra, SearchCacher, SearchCandidate};
+
+pub use super::path::Path;
 use super::{Direction, Point};
 
-#[derive(Debug, Clone, Default, Eq, PartialEq)]
-pub struct Path {
-    steps: Vec<Point>,
-}
-
-impl From<Vec<Point>> for Path {
-    fn from(points: Vec<Point>) -> Self {
-        assert_ne!(points.len(), 0);
-        Self {
-            steps: points.into(),
-        }
-    }
-}
-
-impl Path {
-    pub fn new(origin: Point) -> Self {
-        let mut steps = Vec::with_capacity(1);
-        steps.push(origin);
-        Path { steps }
-    }
-
-    pub fn step(&self, direction: Direction) -> Self {
-        let mut steps = self.steps.clone();
-        steps.push(self.destination().step(direction));
-        Path { steps: steps }
-    }
-
-    pub fn iter(&self) -> impl Iterator<Item = &Point> {
-        self.steps.iter()
-    }
-
-    pub fn origin(&self) -> &Point {
-        self.steps.first().unwrap()
-    }
-
-    pub fn destination(&self) -> &Point {
-        self.steps.last().unwrap()
-    }
-
-    pub fn distance(&self) -> usize {
-        self.steps.len() - 1
-    }
-}
-
-impl Deref for Path {
-    type Target = [Point];
-
-    fn deref(&self) -> &Self::Target {
-        &self.steps
-    }
-}
-
 // Defines a map of locations
-pub trait Map: Sized {
+pub trait Map: Sized + fmt::Debug {
     // Can the sprite step on this location on the path?
     fn is_traversable(&self, location: Point) -> bool;
 
@@ -76,36 +25,114 @@ pub trait Map: Sized {
     }
 }
 
-#[derive(Debug, Eq, PartialEq, Hash, Copy, Clone)]
-struct Query {
-    origin: Point,
-    destiantion: Point,
+/// Holds information about a Path while the search
+/// algorithm (in searcher) runs.
+#[derive(Debug)]
+struct PathCandidate<'m, M> {
+    path: Path,
+    map: &'m M,
+    target: &'m Point,
 }
 
-impl From<(Point, Point)> for Query {
-    fn from(points: (Point, Point)) -> Self {
-        Query {
-            origin: points.0,
-            destiantion: points.0,
+impl<'m, M> Clone for PathCandidate<'m, M> {
+    fn clone(&self) -> Self {
+        Self {
+            path: self.path.clone(),
+            map: self.map,
+            target: self.target,
         }
     }
 }
 
-#[derive(Clone)]
-pub struct Pathfinder<'m, M> {
-    map: &'m M,
-    path_cache: RefCell<HashMap<Query, Option<Path>>>,
+impl<'m, M> PathCandidate<'m, M>
+where
+    M: Map,
+{
+    fn start(origin: Point, map: &'m M, target: &'m Point) -> Self {
+        Self {
+            path: Path::new(origin),
+            map: map,
+            target: target,
+        }
+    }
+
+    fn step(&self, direction: Direction) -> Self {
+        Self {
+            path: self.path.step(direction),
+            map: self.map,
+            target: self.target,
+        }
+    }
 }
 
-impl<'m, M> fmt::Debug for Pathfinder<'m, M>
+impl<'m, M> Ord for PathCandidate<'m, M>
 where
-    M: fmt::Debug,
+    M: Map,
 {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Pathfinder")
-            .field("map", &self.map)
-            .finish()
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.path.distance().cmp(&other.path.distance()).reverse()
     }
+}
+
+impl<'m, M> PartialEq for PathCandidate<'m, M> {
+    fn eq(&self, other: &Self) -> bool {
+        self.path.distance().eq(&other.path.distance())
+    }
+}
+
+impl<'m, M> Eq for PathCandidate<'m, M> {}
+
+impl<'m, M> PartialOrd for PathCandidate<'m, M>
+where
+    M: Map,
+{
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl<'m, M> SearchCandidate for PathCandidate<'m, M>
+where
+    M: Map,
+{
+    fn score(&self) -> usize {
+        self.path.distance()
+    }
+
+    fn is_complete(&self) -> bool {
+        self.path.destination() == self.target
+    }
+
+    fn children(&self) -> Vec<Self> {
+        let mut paths = Vec::new();
+        let destination = self.path.destination();
+        for direction in Direction::all() {
+            let next_point = destination.step(direction);
+            if self.map.is_traversable(next_point)
+                && Some(direction.reverse()) != self.path.last_direction()
+            {
+                paths.push(self.step(direction));
+            }
+        }
+
+        paths
+    }
+}
+
+impl<'m, M> SearchCacher for PathCandidate<'m, M>
+where
+    M: Map,
+{
+    type State = Point;
+
+    fn state(&self) -> Self::State {
+        *self.path.destination()
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Pathfinder<'m, M> {
+    map: &'m M,
 }
 
 impl<'m, M> Pathfinder<'m, M>
@@ -114,96 +141,30 @@ where
 {
     /// Construct a new pathfinder with a pathifinding cache
     pub fn new(map: &'m M) -> Self {
-        Self {
-            map,
-            path_cache: RefCell::from(HashMap::new()),
-        }
-    }
-
-    /// Given a path candidate, compute next step potentail paths
-    fn candidate_paths(&self, candidate: Path, visited: &mut HashSet<Point>) -> Vec<Path> {
-        let mut paths = Vec::new();
-        for direction in Direction::all() {
-            let next_point = candidate.destination().step(direction);
-            if visited.insert(next_point) && self.map.is_traversable(next_point) {
-                paths.push(candidate.step(direction));
-            }
-        }
-
-        paths
-    }
-
-    /// Compute the shortest path between two points, given all possible candidates
-    fn calculate_shortest_path(&self, origin: Point, destination: Point) -> Option<Path> {
-        if !self.map.is_traversable(origin) {
-            return None;
-        }
-
-        let mut visited = HashSet::new();
-
-        // Candidate cached paths.
-        let mut candidates = Vec::new();
-
-        let mut paths: VecDeque<Path> = vec![Path::new(origin)].into();
-
-        while !paths.is_empty() {
-            let candidate = paths.pop_front().unwrap();
-
-            // This path struck a target, stop hunting
-            if candidate.destination() == &destination {
-                candidates.push(candidate);
-            } else if candidate.distance()
-                < candidates
-                    .iter()
-                    .map(|p| p.distance())
-                    .max()
-                    .unwrap_or(usize::MAX)
-            {
-                // Find all children of this path, if it is shorter than our current options
-                paths.extend(self.candidate_paths(candidate, &mut visited).into_iter());
-            }
-        }
-
-        candidates
-            .into_iter()
-            .min_by_key(|c| c.distance())
-            .map(|c| c.into())
+        Self { map }
     }
 
     /// Find a path between the origin point given and an enemy.
     pub fn find_path(&self, origin: Point, destination: Point) -> Option<Path> {
-        {
-            match self
-                .path_cache
-                .borrow_mut()
-                .entry((origin, destination).into())
-            {
-                Entry::Occupied(e) => {
-                    return e.get().clone();
-                }
-                Entry::Vacant(e) => {
-                    e.insert(self.calculate_shortest_path(origin, destination));
-                }
-            }
+        if !self.map.is_traversable(origin) {
+            return None;
         }
+        let start = PathCandidate::start(origin, self.map, &destination);
 
-        self.find_path(origin, destination)
-    }
-
-    pub(crate) fn clear(&self) {
-        self.path_cache.borrow_mut().clear();
+        djirkstra(start).run().ok().map(|c| c.path)
     }
 }
 
 #[cfg(test)]
 mod test {
 
+    use std::collections::HashSet;
     use std::str::FromStr;
 
     use super::*;
     use crate::Position;
 
-    #[derive(Debug, Default)]
+    #[derive(Debug, Default, Clone)]
     struct SimpleMap {
         spaces: HashSet<Point>,
     }
@@ -242,7 +203,7 @@ mod test {
         }
     }
 
-    #[derive(Debug, Default)]
+    #[derive(Debug, Default, Clone)]
     struct OpenMap {
         walls: HashSet<Point>,
     }

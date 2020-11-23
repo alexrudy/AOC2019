@@ -21,6 +21,7 @@ impl Key {
     }
 }
 
+#[derive(Debug)]
 struct NoDoorMap<'m>(&'m map::Map);
 
 impl<'m> pathfinder::Map for NoDoorMap<'m> {
@@ -317,6 +318,7 @@ mod map {
         }
     }
 
+    #[derive(Debug)]
     struct Scout<'m, 'k> {
         origin: Point,
         map: &'m Map,

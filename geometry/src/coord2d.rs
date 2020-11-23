@@ -12,6 +12,7 @@ use thiserror::Error;
 
 use crate::Position;
 
+pub mod path;
 pub mod pathfinder;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -54,6 +55,15 @@ impl Direction {
             Direction::Down => Direction::Left,
             Direction::Left => Direction::Up,
             Direction::Right => Direction::Down,
+        }
+    }
+
+    pub fn reverse(&self) -> Direction {
+        match self {
+            Direction::Up => Direction::Down,
+            Direction::Down => Direction::Up,
+            Direction::Left => Direction::Right,
+            Direction::Right => Direction::Left,
         }
     }
 }

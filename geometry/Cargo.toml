@@ -9,3 +9,4 @@ thiserror = "*"
 regex = "1"
 lazy_static = "1"
 itertools = "*"
+searcher = { path = "../searcher" }
