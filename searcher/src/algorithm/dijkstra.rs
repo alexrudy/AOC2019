@@ -81,6 +81,11 @@ where
     fn len(&self) -> usize {
         self.queue.len()
     }
+
+    #[allow(unused_variables)]
+    fn can_terminate(&self, candidate: &Self::Candidate) -> bool {
+        true
+    }
 }
 
 pub type DijkstraSearch<S> = SearchAlgorithm<S, DijkstraQueue<S>, BasicCache<S>>;
@@ -98,7 +103,7 @@ where
 /// searches the next shortest path even when paths end up with varying
 /// lenghts. To be optimal, Dijkstra's algorithm requires that it remember
 /// the states observed, hence the SearchCacher constraint.
-pub fn dijkstra<S>(origin: S) -> Result<S>
+pub fn run<S>(origin: S) -> Result<S>
 where
     S: SearchCandidate + SearchCacher,
 {

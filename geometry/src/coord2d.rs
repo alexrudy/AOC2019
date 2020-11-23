@@ -77,14 +77,18 @@ pub struct Point {
 }
 
 impl Point {
+    /// Build a new point from coordinates.
     pub fn new(x: Position, y: Position) -> Self {
         Self { x, y }
     }
 
+    /// Returns a point at (0, 0)
     pub fn origin() -> Self {
         Self { x: 0, y: 0 }
     }
 
+    /// Compare this point to another in "reading order"
+    /// which is y then x.
     pub fn reading_order(self, other: Point) -> cmp::Ordering {
         self.y.cmp(&other.y).then(self.x.cmp(&other.x)).reverse()
     }
@@ -117,6 +121,7 @@ impl Point {
         }
     }
 
+    /// Step in a given direction.
     pub fn step(self, direction: Direction) -> Self {
         match direction {
             Direction::Left => self.left(),
@@ -126,10 +131,12 @@ impl Point {
         }
     }
 
+    /// Iterate over all adjacent points.
     pub fn adjacent(self) -> impl Iterator<Item = Self> {
         Direction::all().map(move |d| self.step(d))
     }
 
+    /// Iterate over all diagonally adjacent points
     pub fn adjacent_diagonal(self) -> impl Iterator<Item = Self> {
         iproduct!(-1..2, -1..2)
             .filter(|(x, y)| !(*x == 0 && *y == 0))
@@ -140,6 +147,7 @@ impl Point {
         (self.x - other.x).abs() + (self.y - other.y).abs()
     }
 
+    /// Compute offset for this point
     pub fn offset(self, other: Point) -> Point {
         Point {
             x: self.x - other.x,
@@ -236,6 +244,15 @@ pub enum Edge {
     BottomRight,
     Bottom,
     BottomLeft,
+}
+
+impl Edge {
+    pub fn is_corner(&self) -> bool {
+        match self {
+            Edge::TopLeft | Edge::TopRight | Edge::BottomLeft | Edge::BottomRight => true,
+            _ => false,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

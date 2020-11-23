@@ -100,7 +100,7 @@ where
 ///
 /// A* always considers the next candidate to be the one with the lowest
 /// estimated score, as provided by the heuristic.
-pub fn astar<S>(origin: S) -> Result<S>
+pub fn run<S>(origin: S) -> Result<S>
 where
     S: SearchHeuristic + SearchCacher,
 {

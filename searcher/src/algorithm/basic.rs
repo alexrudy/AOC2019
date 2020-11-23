@@ -1,7 +1,4 @@
-pub use bfs::bfs;
-pub use dfs::dfs;
-
-mod bfs {
+pub mod bfs {
     use std::collections::VecDeque;
     use std::default::Default;
 
@@ -49,7 +46,7 @@ mod bfs {
 
     /// Breadth-first search, where the order is determined
     /// by the candidates returned by the [SearchCandidate::children] method.
-    pub fn bfs<S>(origin: S) -> Result<S>
+    pub fn run<S>(origin: S) -> Result<S>
     where
         S: SearchCandidate,
     {
@@ -57,7 +54,7 @@ mod bfs {
     }
 }
 
-mod dfs {
+pub mod dfs {
     use std::collections::VecDeque;
     use std::default::Default;
 
@@ -104,7 +101,7 @@ mod dfs {
 
     /// Depth-first search, where the order is determined
     /// by the candidates returned by the [SearchCandidate::children] method.
-    pub fn dfs<S>(origin: S) -> Result<S>
+    pub fn run<S>(origin: S) -> Result<S>
     where
         S: SearchCandidate,
     {

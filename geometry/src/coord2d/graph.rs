@@ -164,7 +164,10 @@ where
 
     /// Iterate through the edges of a graph which connect to this node.
     pub fn edges(&self, location: Point) -> impl Iterator<Item = (&Point, &Path)> {
-        self.nodes.get(&location).unwrap().iter()
+        self.nodes
+            .get(&location)
+            .expect(&format!("{:?} is not a node", location))
+            .iter()
     }
 
     /// Find a path within the graph.

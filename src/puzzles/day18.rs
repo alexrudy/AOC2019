@@ -193,6 +193,166 @@ impl ToString for KeyPath {
     }
 }
 
+#[derive(Debug, Eq, PartialEq, Hash, Clone)]
+pub(crate) struct MultiSpelunkState(String, [Point; 4]);
+
+#[derive(Debug, Clone)]
+pub(crate) struct MultiSpelunkPath {
+    keys: map::KeyRing,
+    path: Vec<char>,
+    locations: [Point; 4],
+    distance: usize,
+}
+
+impl MultiSpelunkPath {
+    fn start(origins: [Point; 4]) -> Self {
+        Self {
+            keys: map::KeyRing::default(),
+            path: Vec::new(),
+            locations: origins,
+            distance: 0,
+        }
+    }
+
+    fn found_key(&mut self, key: char) {
+        if self.keys.insert(key) {
+            self.path.push(key);
+        }
+    }
+
+    fn distance(&self) -> usize {
+        self.distance
+    }
+
+    fn keys(&self) -> KeyPath {
+        KeyPath(self.path.clone())
+    }
+}
+
+#[derive(Debug, Clone)]
+struct MultiSpelunker<'m> {
+    caves: &'m map::MultiMap,
+    graphs: [&'m graph::Graph<'m, map::MultiMap>; 4],
+    path: MultiSpelunkPath,
+}
+
+impl<'m> SearchCandidate for MultiSpelunker<'m> {
+    fn is_complete(&self) -> bool {
+        self.path.keys.len() == self.caves.keys().len()
+    }
+
+    fn score(&self) -> usize {
+        self.distance()
+    }
+
+    fn children(&self) -> Vec<Self> {
+        self.candidates()
+    }
+}
+
+impl<'m> SearchCacher for MultiSpelunker<'m> {
+    type State = MultiSpelunkState;
+
+    fn state(&self) -> MultiSpelunkState {
+        MultiSpelunkState(self.path.keys.state(), self.path.locations)
+    }
+}
+
+impl<'m> MultiSpelunker<'m> {
+    fn new(
+        map: &'m map::MultiMap,
+        graphs: [&'m graph::Graph<'m, map::MultiMap>; 4],
+        origins: [Point; 4],
+    ) -> Self {
+        Self {
+            caves: map,
+            graphs: graphs,
+            path: MultiSpelunkPath::start(origins),
+        }
+    }
+
+    fn candidates(&self) -> Vec<MultiSpelunker<'m>> {
+        let mut candidates = Vec::new();
+
+        for (i, (location, graph)) in self
+            .path
+            .locations
+            .iter()
+            .zip(self.graphs.iter())
+            .enumerate()
+        {
+            for (point, path) in graph.edges(*location) {
+                match self.caves.get(*point) {
+                    Some(map::Tile::Key(c)) => {
+                        let mut newsp = self.clone();
+                        newsp.path.found_key(c);
+                        newsp.path.locations[i] = *point;
+                        newsp.path.distance += path.distance();
+                        candidates.push(newsp);
+                    }
+                    Some(map::Tile::Door(c)) if self.path.keys.contains(&c) => {
+                        let mut newsp = self.clone();
+                        newsp.path.locations[i] = *point;
+                        newsp.path.distance += path.distance();
+                        candidates.push(newsp);
+                    }
+                    Some(map::Tile::Entrance) => {
+                        let mut newsp = self.clone();
+                        newsp.path.locations[i] = *point;
+                        newsp.path.distance += path.distance();
+                        candidates.push(newsp);
+                    }
+                    Some(map::Tile::Door(_)) => {}
+                    Some(map::Tile::Hall) => {
+                        let mut newsp = self.clone();
+                        newsp.path.locations[i] = *point;
+                        newsp.path.distance += path.distance();
+                        candidates.push(newsp);
+                    }
+                    None => {}
+                }
+            }
+        }
+
+        candidates
+    }
+
+    fn distance(&self) -> usize {
+        self.path.distance
+    }
+}
+
+fn multisearch<'m>(map: &'m map::MultiMap) -> Result<MultiSpelunkPath, Error> {
+    use geometry::coord2d::graph::Graphable;
+    use searcher::SearchOptions;
+
+    use std::convert::TryInto;
+
+    let entrances = map.entrances();
+
+    let graphs: Vec<_> = entrances.iter().map(|e| map.graph(*e)).collect();
+
+    {
+        let grefs: [&graph::Graph<map::MultiMap>; 4] = graphs
+            .iter()
+            .collect::<Vec<_>>()
+            .try_into()
+            .map_err(|_| anyhow!("Can't form graph ref"))?;
+
+        let origin = MultiSpelunker::new(map, grefs, entrances.clone());
+
+        let options = SearchOptions {
+            limit: None,
+            verbose: Some(10_000),
+        };
+
+        Ok(searcher::dijkstra::build(origin)
+            .with_options(options)
+            .run()
+            .map(|c| c.path)?)
+    }
+}
+
 fn search<'m>(map: &'m map::Map) -> Result<SpelunkPath, Error> {
     use geometry::coord2d::graph::Graphable;
 
@@ -204,10 +364,12 @@ fn search<'m>(map: &'m map::Map) -> Result<SpelunkPath, Error> {
 
 mod map {
     use anyhow::{anyhow, Error};
-    use geometry::coord2d::Point;
+    use geometry::coord2d::{BoundingBox, Point};
 
     use geometry::coord2d::graph;
     use geometry::coord2d::pathfinder;
+
+    use lazy_static::lazy_static;
 
     use std::collections::{HashMap, HashSet};
     use std::convert::{TryFrom, TryInto};
@@ -333,10 +495,94 @@ mod map {
 
     impl pathfinder::Map for Map {
         fn is_traversable(&self, location: Point) -> bool {
-            match self.get(location) {
-                Some(_) => true,
+            self.get(location).is_some()
+        }
+    }
+
+    #[derive(Debug, Clone)]
+    pub(crate) struct MultiMap(Map, HashMap<Point, Option<Tile>>, [Point; 4]);
+
+    impl FromStr for MultiMap {
+        type Err = Error;
+        fn from_str(s: &str) -> Result<Self, Self::Err> {
+            let map: Map = s.parse()?;
+            Ok(MultiMap::new(map))
+        }
+    }
+
+    impl MultiMap {
+        pub(crate) fn new(map: Map) -> Self {
+            lazy_static! {
+                static ref OFFSETS: [Point; 4] = [
+                    (1, 1).into(),
+                    (1, -1).into(),
+                    (-1, 1).into(),
+                    (-1, -1).into()
+                ];
+            }
+
+            let entrance = map.entrance().unwrap();
+
+            let entrances: [Point; 4] = {
+                let v: Vec<Point> = OFFSETS
+                    .iter()
+                    .map(|p| Point::new(entrance.x + p.x, entrance.y + p.y))
+                    .collect();
+                v.try_into().unwrap_or_else(|v: Vec<Point>| {
+                    panic!("Expected a Vec of length {} but it was {}", 4, v.len())
+                })
+            };
+
+            let mut overrides = HashMap::new();
+            {
+                let mut bbox = BoundingBox::empty();
+                bbox.include(entrance);
+                bbox = bbox.margin(1);
+
+                for p in bbox.points() {
+                    if bbox.edge(p).map(|e| e.is_corner()).unwrap_or(false) {
+                        overrides.insert(p, Some(Tile::Entrance));
+                    } else {
+                        overrides.insert(p, None);
+                    }
+                }
+            }
+
+            MultiMap(map, overrides, entrances)
+        }
+
+        pub(crate) fn entrances(&self) -> &[Point; 4] {
+            &self.2
+        }
+
+        pub(crate) fn keys(&self) -> HashSet<Key> {
+            self.0.keys()
+        }
+
+        pub(crate) fn get(&self, location: Point) -> Option<Tile> {
+            match self.1.get(&location) {
+                Some(t) => t.clone(),
+                None => self.0.get(location),
+            }
+        }
+    }
+
+    impl graph::Graphable for MultiMap {
+        fn is_node(&self, point: &Point) -> bool {
+            let options = self.movement_options(point);
+            match self.get(*point) {
+                Some(Tile::Door(_)) => true,
+                Some(Tile::Key(_)) => true,
+                Some(Tile::Entrance) => true,
+                Some(Tile::Hall) => options == 1 || options > 2,
                 None => false,
             }
+        }
+    }
+
+    impl pathfinder::Map for MultiMap {
+        fn is_traversable(&self, location: Point) -> bool {
+            self.get(location).is_some()
         }
     }
 }
@@ -348,12 +594,24 @@ pub(crate) fn main(mut input: Box<dyn Read + 'static>) -> ::std::result::Result<
         buf.parse()?
     };
 
-    let start = time::Instant::now();
+    {
+        let start = time::Instant::now();
 
-    let sp = search(&map)?;
-    println!("Part 1: {}", sp.distance());
-    println!("  Keys: {}", sp.keys().to_string());
-    println!("  Time: {}s", start.elapsed().as_secs());
+        let sp = search(&map)?;
+        println!("Part 1: {}", sp.distance());
+        println!("  Keys: {}", sp.keys().to_string());
+        println!("  Time: {}s", start.elapsed().as_secs());
+    }
+
+    {
+        let start = time::Instant::now();
+        let mm = map::MultiMap::new(map);
+
+        let sp = multisearch(&mm)?;
+        println!("Part 2: {}", sp.distance());
+        println!("  Keys: {}", sp.keys().to_string());
+        println!("  Time: {}s", start.elapsed().as_secs());
+    }
 
     Ok(())
 }
@@ -463,5 +721,83 @@ mod test {
 
         let sp = search(&map).unwrap();
         assert_eq!(sp.distance(), 81);
+    }
+
+    #[test]
+    fn examples_part2_a() {
+        let mmap: map::MultiMap = "
+        #######
+        #a.#Cd#
+        ##...##
+        ##.@.##
+        ##...##
+        #cB#Ab#
+        #######
+        "
+        .parse()
+        .unwrap();
+
+        for entrance in mmap.entrances().iter() {
+            assert_eq!(mmap.get(*entrance), Some(map::Tile::Entrance));
+        }
+
+        let mp = multisearch(&mmap).unwrap();
+        assert_eq!(mp.distance(), 8);
+    }
+
+    #[test]
+    fn examples_part2_b() {
+        let mmap: map::MultiMap = "
+        ###############
+        #d.ABC.#.....a#
+        ######...######
+        ######.@.######
+        ######...######
+        #b.....#.....c#
+        ###############
+        "
+        .parse()
+        .unwrap();
+
+        let mp = multisearch(&mmap).unwrap();
+        assert_eq!(mp.distance(), 24);
+    }
+
+    #[test]
+    fn examples_part2_c() {
+        let mmap: map::MultiMap = "
+        #############
+        #DcBa.#.GhKl#
+        #.###...#I###
+        #e#d#.@.#j#k#
+        ###C#...###J#
+        #fEbA.#.FgHi#
+        #############
+        "
+        .parse()
+        .unwrap();
+
+        let mp = multisearch(&mmap).unwrap();
+        assert_eq!(mp.distance(), 32);
+    }
+
+    #[test]
+    fn examples_part2_d() {
+        let mmap: map::MultiMap = "
+        #############
+        #g#f.D#..h#l#
+        #F###e#E###.#
+        #dCba...BcIJ#
+        #####.@.#####
+        #nK.L...G...#
+        #M###N#H###.#
+        #o#m..#i#jk.#
+        #############
+        "
+        .parse()
+        .unwrap();
+
+        let mp = multisearch(&mmap).unwrap();
+        assert_eq!(mp.distance(), 72);
     }
 }

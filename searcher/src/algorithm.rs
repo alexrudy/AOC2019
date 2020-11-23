@@ -8,10 +8,10 @@ use self::cache::Cache;
 use crate::errors::{Result, SearchError};
 use crate::traits::SearchCandidate;
 
-pub(crate) mod astar;
-pub(crate) mod basic;
-pub(crate) mod cache;
-pub(crate) mod dijkstra;
+pub mod astar;
+pub mod basic;
+pub mod cache;
+pub mod dijkstra;
 
 /// Trait used to implement queues of search candidates
 /// which should be checked for completion.
@@ -23,6 +23,11 @@ pub trait SearchQueue {
     fn push(&mut self, item: Self::Candidate);
 
     fn len(&self) -> usize;
+
+    #[allow(unused_variables)]
+    fn can_terminate(&self, candidate: &Self::Candidate) -> bool {
+        false
+    }
 }
 
 #[derive(Debug)]
@@ -99,6 +104,12 @@ impl StepLimit {
     }
 }
 
+#[derive(Debug, Default)]
+pub struct SearchOptions {
+    pub limit: Option<usize>,
+    pub verbose: Option<usize>,
+}
+
 /// Implementation of search, using generic components.
 ///
 /// Uses a generic queue (Q) and a generic cache (C) to provide
@@ -114,6 +125,7 @@ where
     queue: Q,
     results: BinaryHeap<Score<S>>,
     counter: Option<StepLimit>,
+    options: SearchOptions,
 }
 
 impl<S, Q, C> SearchAlgorithm<S, Q, C>
@@ -122,23 +134,28 @@ where
     Q: SearchQueue<Candidate = S> + Default,
     C: Cache<Candidate = S>,
 {
-    fn new(origin: S) -> Self {
+    fn new_with_options(origin: S, options: SearchOptions) -> Self {
+        let counter = options.limit.map(|l| StepLimit::new(l));
+
         let mut sr = SearchAlgorithm {
             cache: C::default(),
             queue: Q::default(),
             results: BinaryHeap::default(),
-            counter: None,
+            counter: counter,
+            options: options,
         };
         sr.queue.push(origin);
         sr
     }
 
-    /// Set a step limit for this search algorithm.
-    ///
-    /// When this many candidates have been explored,
-    /// the search algorithm will retun an error.
-    pub fn set_limit(&mut self, limit: usize) {
-        self.counter = Some(StepLimit::new(limit))
+    fn new(origin: S) -> Self {
+        Self::new_with_options(origin, SearchOptions::default())
+    }
+
+    pub fn with_options(mut self, options: SearchOptions) -> Self {
+        let origin = self.queue.pop().unwrap();
+
+        Self::new_with_options(origin, options)
     }
 
     fn best(&self) -> Option<&S> {
@@ -173,6 +190,10 @@ where
         Ok(None)
     }
 
+    pub fn show_debug_msg(&self, n: usize) -> bool {
+        self.options.verbose.map(|v| n % v == 0).unwrap_or(false)
+    }
+
     /// Run the search to completion.
     pub fn run(mut self) -> Result<S> {
         let mut n = 0;
@@ -181,7 +202,8 @@ where
 
             let score = candidate.score();
             let will_process = self.process_candidate(candidate)?;
-            if n % 10_000 == 0 {
+
+            if self.show_debug_msg(n) {
                 eprintln!(
                     "Q{} R{} S{:?} ({} {}) {}",
                     self.queue.len(),
@@ -197,6 +219,13 @@ where
                 for child in candidate.children() {
                     self.queue.push(child);
                 }
+            }
+            if self
+                .best()
+                .map(|c| self.queue.can_terminate(c))
+                .unwrap_or(false)
+            {
+                break;
             }
         }
         self.results

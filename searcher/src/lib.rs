@@ -8,7 +8,8 @@ pub use traits::SearchCacher;
 pub use traits::SearchCandidate;
 pub use traits::SearchHeuristic;
 
-pub use algorithm::astar::astar;
-pub use algorithm::basic::bfs;
-pub use algorithm::basic::dfs;
-pub use algorithm::dijkstra::dijkstra;
+pub use algorithm::astar::{self, run as astar};
+pub use algorithm::basic::bfs::{self, run as bfs};
+pub use algorithm::basic::dfs::{self, run as dfs};
+pub use algorithm::dijkstra::{self, run as dijkstra};
+pub use algorithm::SearchOptions;
