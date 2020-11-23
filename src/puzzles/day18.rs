@@ -143,9 +143,6 @@ impl<'m> Spelunker<'m> {
 
         for direction in Direction::all() {
             let target = self.location.step(direction);
-            if self.caves.is_deadend(&target, &self.keys) {
-                continue;
-            }
 
             match self.caves.get(target) {
                 Some(map::Tile::Key(c)) => {
@@ -217,10 +214,8 @@ fn search<'m>(map: &'m map::Map) -> Result<Spelunker<'m>, Error> {
 
 mod map {
     use anyhow::{anyhow, Error};
-    use geometry::coord2d::pathfinder;
-    use geometry::coord2d::{Direction, Point};
+    use geometry::coord2d::Point;
 
-    use std::cell::RefCell;
     use std::collections::{HashMap, HashSet};
     use std::convert::{TryFrom, TryInto};
     use std::str::FromStr;
@@ -276,26 +271,8 @@ mod map {
     }
 
     #[derive(Debug, Clone, Default)]
-    struct DeadendCache(HashSet<Point>);
-
-    impl DeadendCache {
-        fn warmed(&self, keys: &KeyRing) -> bool {
-            !self.0.is_empty()
-        }
-
-        fn contains(&self, location: &Point, keys: &KeyRing) -> bool {
-            self.0.contains(location)
-        }
-
-        fn insert(&mut self, location: &Point, keys: &KeyRing) -> bool {
-            self.0.insert(*location)
-        }
-    }
-
-    #[derive(Debug, Clone, Default)]
     pub(crate) struct Map {
         tiles: HashMap<Point, Tile>,
-        deadends: RefCell<DeadendCache>,
     }
 
     impl FromStr for Map {
@@ -318,88 +295,12 @@ mod map {
         }
     }
 
-    #[derive(Debug)]
-    struct Scout<'m, 'k> {
-        origin: Point,
-        map: &'m Map,
-        keys: &'k KeyRing,
-    }
-
-    impl<'m, 'k> pathfinder::Map for Scout<'m, 'k> {
-        fn is_traversable(&self, location: Point) -> bool {
-            location != self.origin
-                && match self.map.get(location) {
-                    // Some(Tile::Door(ref c)) => self.keys.contains(c),
-                    Some(_) => true,
-                    None => false,
-                }
-        }
-    }
-
     impl Map {
         fn new(tiles: HashMap<Point, Tile>) -> Self {
             Map {
                 tiles,
                 ..Map::default()
             }
-        }
-
-        fn precompute_deadend(&self, location: &Point, keys: &KeyRing) {
-            for direction in Direction::all() {
-                if !self.precompute_deadend_direction(location, direction, keys) {
-                    self.deadends
-                        .borrow_mut()
-                        .insert(&location.step(direction), keys);
-                }
-            }
-        }
-
-        fn precompute_deadend_direction(
-            &self,
-            location: &Point,
-            direction: Direction,
-            keys: &KeyRing,
-        ) -> bool {
-            use pathfinder::Map;
-            let start = location.step(direction);
-            let scout = Scout {
-                origin: *location,
-                map: self,
-                keys: keys,
-            };
-
-            for (point, tile) in self.tiles.iter() {
-                let target = match tile {
-                    Tile::Key(c) if !keys.contains(c) => Some(point),
-                    Tile::Door(c) if !keys.contains(c) => Some(point),
-                    _ => None,
-                };
-                if let Some(end) = target {
-                    if scout.path(start, *end).is_some() {
-                        return true;
-                    }
-                }
-            }
-            false
-        }
-
-        fn precompute_deadends(&self, keys: &KeyRing) {
-            for (point, tile) in self.tiles.iter() {
-                match tile {
-                    Tile::Key(_) => self.precompute_deadend(point, keys),
-                    // Tile::Door(_) => self.precompute_deadend(point, keys),
-                    _ => {}
-                }
-            }
-        }
-
-        pub(crate) fn is_deadend(&self, location: &Point, keys: &KeyRing) -> bool {
-            if !self.deadends.borrow().warmed(keys) {
-                // self.deadends.borrow_mut().inherit(keys);
-                self.precompute_deadends(keys);
-                // eprintln!("{:?}", self.deadends.borrow());
-            }
-            self.deadends.borrow().contains(location, keys)
         }
 
         pub(crate) fn keys(&self) -> HashSet<Key> {
