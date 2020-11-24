@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Error};
-use geometry::coord2d::Point;
+use geometry::coord2d::{BoundingBox, Point};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::convert::TryInto;
 use std::fmt;
@@ -52,12 +52,8 @@ impl AsteroidMap {
         })
     }
 
-    fn bbox(&self) -> Option<(i32, i32, i32, i32)> {
-        let lower = self.asteroids.iter().map(|a| a.y).min()?;
-        let upper = self.asteroids.iter().map(|a| a.y).max()?;
-        let left = self.asteroids.iter().map(|a| a.x).min()?;
-        let right = self.asteroids.iter().map(|a| a.x).max()?;
-        Some((left, right, lower, upper))
+    fn bbox(&self) -> BoundingBox {
+        BoundingBox::from_points(self.asteroids.iter())
     }
 
     fn observatories(&self) -> Observatories {
@@ -101,19 +97,16 @@ impl FromStr for AsteroidMap {
 
 impl fmt::Display for AsteroidMap {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if let Some(bbox) = self.bbox() {
-            for y in bbox.2..=bbox.3 {
-                for x in bbox.0..=bbox.1 {
-                    let point = Point::new(x, y);
-                    if self.asteroids.contains(&point) {
-                        write!(f, "#")?;
-                    } else {
-                        write!(f, ".")?;
-                    }
-                }
-                writeln!(f, "")?;
+        let bbox = self.bbox();
+        bbox.printer(f, |f, p| {
+            if self.asteroids.contains(p) {
+                write!(f, "#")?;
+            } else {
+                write!(f, ".")?;
             }
-        }
+            Ok(())
+        })?;
+
         Ok(())
     }
 }
@@ -246,12 +239,8 @@ struct Observatories {
 }
 
 impl Observatories {
-    fn bbox(&self) -> Option<(i32, i32, i32, i32)> {
-        let lower = self.locations.keys().map(|a| a.y).min()?;
-        let upper = self.locations.keys().map(|a| a.y).max()?;
-        let left = self.locations.keys().map(|a| a.x).min()?;
-        let right = self.locations.keys().map(|a| a.x).max()?;
-        Some((left, right, lower, upper))
+    fn bbox(&self) -> BoundingBox {
+        BoundingBox::from_points(self.locations.keys())
     }
 
     fn best(&self) -> Option<&Observatory> {
@@ -266,22 +255,19 @@ impl Observatories {
 
 impl fmt::Display for Observatories {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if let Some(bbox) = self.bbox() {
-            for y in bbox.2..=bbox.3 {
-                for x in bbox.0..=bbox.1 {
-                    let point = Point::new(x, y);
-                    match self.locations.get(&point) {
-                        Some(obs) => {
-                            write!(f, "{}", obs.ntargets())?;
-                        }
-                        None => {
-                            write!(f, ".")?;
-                        }
-                    }
+        let bbox = self.bbox();
+        bbox.printer(f, |f, p| {
+            match self.locations.get(&p) {
+                Some(obs) => {
+                    write!(f, "{}", obs.ntargets())?;
                 }
-                writeln!(f, "")?;
+                None => {
+                    write!(f, ".")?;
+                }
             }
-        }
+            Ok(())
+        })?;
+
         Ok(())
     }
 }

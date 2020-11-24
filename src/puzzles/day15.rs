@@ -147,7 +147,7 @@ impl Map {
     }
 
     fn bbox(&self) -> BoundingBox {
-        BoundingBox::from_points(self.tiles.keys().copied())
+        BoundingBox::from_points(self.tiles.keys())
     }
 }
 
@@ -172,18 +172,14 @@ impl<'m> pathfinder::Map for Realized<'m> {
 impl fmt::Display for Map {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let bbox = self.bbox().margin(1);
-        for y in bbox.vertical() {
-            for x in bbox.horizontal() {
-                let point: Point = (x, y).into();
-                if let Some(tile) = self.check(point) {
-                    write!(f, "{}", tile)?;
-                } else {
-                    write!(f, " ")?;
-                }
+
+        bbox.printer(f, |f, p| {
+            if let Some(tile) = self.check(*p) {
+                write!(f, "{}", tile)
+            } else {
+                write!(f, " ")
             }
-            write!(f, "\n")?;
-        }
-        Ok(())
+        })
     }
 }
 
@@ -352,22 +348,18 @@ impl fmt::Display for ShipSection {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let bbox = self.map.bbox().margin(1);
         let droid = self.droid().location();
-        for y in bbox.vertical() {
-            for x in bbox.horizontal() {
-                let point: Point = (x, y).into();
-                if point == droid {
-                    write!(f, "D")?;
+
+        bbox.printer(f, |f, point| {
+            if *point == droid {
+                write!(f, "D")
+            } else {
+                if let Some(tile) = self.map.check(*point) {
+                    write!(f, "{}", tile)
                 } else {
-                    if let Some(tile) = self.map.check(point) {
-                        write!(f, "{}", tile)?;
-                    } else {
-                        write!(f, " ")?;
-                    }
+                    write!(f, " ")
                 }
             }
-            writeln!(f, "")?;
-        }
-        Ok(())
+        })
     }
 }
 

@@ -70,7 +70,7 @@ impl Screen {
     }
 
     pub(crate) fn bbox(&self) -> BoundingBox {
-        BoundingBox::from_points(self.pixels.keys().copied())
+        BoundingBox::from_points(self.pixels.keys())
     }
 
     pub(crate) fn get(&self, point: &Point) -> Option<&Tile> {

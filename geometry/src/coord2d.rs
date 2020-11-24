@@ -342,10 +342,10 @@ impl BoundingBox {
     }
 
     /// Construct a bounding box from an iterator of points.
-    pub fn from_points(points: impl Iterator<Item = Point>) -> Self {
+    pub fn from_points<'a>(points: impl Iterator<Item = &'a Point>) -> Self {
         let mut bbox = Self::empty();
         for point in points {
-            bbox.include(point);
+            bbox.include(*point);
         }
         bbox
     }
@@ -509,7 +509,7 @@ impl BoundingBox {
     ///
     /// This function will handle newlines. The callback should print
     /// a single character for each point.
-    pub fn printer<F>(&self, cb: F, f: &mut fmt::Formatter) -> fmt::Result
+    pub fn printer<F>(&self, f: &mut fmt::Formatter, cb: F) -> fmt::Result
     where
         F: Fn(&mut fmt::Formatter, &Point) -> fmt::Result,
     {
