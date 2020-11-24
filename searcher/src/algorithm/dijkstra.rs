@@ -1,3 +1,5 @@
+//! Dijrkstra's Algorithm
+
 use std::cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd};
 use std::collections::BinaryHeap;
 use std::default::Default;
@@ -8,8 +10,10 @@ use crate::algorithm::SearchQueue;
 use crate::errors::Result;
 use crate::traits::{SearchCacher, SearchCandidate};
 
+/// Wrapper for search candidates which sorts appropriately
+/// for Dijrkstra's Algorithm.
 #[derive(Debug)]
-pub struct DjirkstraElement<S>
+struct DjirkstraElement<S>
 where
     S: SearchCandidate,
 {
@@ -45,6 +49,8 @@ where
     }
 }
 
+/// A priority queue to always search the next shortest path
+/// by measured distance.
 #[derive(Debug)]
 pub struct DijkstraQueue<S>
 where
@@ -88,8 +94,11 @@ where
     }
 }
 
+/// Search algorithm which implements Dijkstra's Algorithm for
+/// graph searches.
 pub type DijkstraSearch<S> = SearchAlgorithm<S, DijkstraQueue<S>, BasicCache<S>>;
 
+/// Build a Dijkstra's Alogrithm Searcher
 pub fn build<S>(origin: S) -> DijkstraSearch<S>
 where
     S: SearchCandidate + SearchCacher,

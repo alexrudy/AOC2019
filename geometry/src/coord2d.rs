@@ -1,3 +1,5 @@
+//! Coordinate work in two dimensions.
+
 #![allow(dead_code)]
 
 use std::cmp;
@@ -17,6 +19,7 @@ pub mod map;
 pub mod path;
 pub mod pathfinder;
 
+/// A movement direction in two dimensions.
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Direction {
     Up,
@@ -70,6 +73,10 @@ impl Direction {
     }
 }
 
+/// A location in 2D space.
+///
+/// Essentially a 2-tuple of x and y position,
+/// but with a lot of provided methods.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Point {
     pub x: Position,
@@ -136,6 +143,11 @@ impl Point {
         Direction::all().map(move |d| self.step(d))
     }
 
+    /// Check if a point is adjacent.
+    pub fn is_adjacent(&self, point: &Point) -> bool {
+        self.manhattan_distance(*point) == 1
+    }
+
     /// Iterate over all diagonally adjacent points
     pub fn adjacent_diagonal(self) -> impl Iterator<Item = Self> {
         iproduct!(-1..2, -1..2)
@@ -143,6 +155,8 @@ impl Point {
             .map(move |(x, y)| Point::new(self.x + x, self.y + y))
     }
 
+    /// Manhattan distance between two points is the distance along
+    /// each coordinate
     pub fn manhattan_distance(self, other: Point) -> Position {
         (self.x - other.x).abs() + (self.y - other.y).abs()
     }
@@ -155,6 +169,9 @@ impl Point {
         }
     }
 
+    /// What direction connects these two points?
+    ///
+    /// If they are not adjacent, return `None`.
     pub fn direction(self, other: Point) -> Option<Direction> {
         match (self.x, self.y) {
             (x, y) if x == other.x + 1 && y == other.y => Some(Direction::Left),
@@ -202,6 +219,7 @@ impl From<(usize, usize)> for Point {
     }
 }
 
+/// Error when parsing a point from string.
 #[derive(Debug, Error)]
 pub enum ParsePointError {
     #[error("Invalid Point: {}", _0)]
@@ -234,6 +252,7 @@ impl FromStr for Point {
     }
 }
 
+/// Describes the side of a bounding box
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum Edge {
     Left,
@@ -255,6 +274,8 @@ impl Edge {
     }
 }
 
+/// A rectangle which encloses points and is aligned
+/// with the coordinate axes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BoundingBox {
     left: Position,
@@ -284,7 +305,7 @@ impl BoundingBox {
         }
     }
 
-    /// Constructor for a boudning box
+    /// Constructor for a boudning box from the extent coordinates.
     pub fn new(left: Position, right: Position, top: Position, bottom: Position) -> Self {
         Self {
             left,
@@ -357,6 +378,11 @@ impl BoundingBox {
         }
     }
 
+    /// Return a new bounding box with a margin
+    /// added to all sides. `size` is the margin
+    /// on each side, i.e. adding a margin of 1 makes
+    /// the bounding box bigger by 2, one on the left and one
+    /// on the right.
     pub fn margin(&self, size: Position) -> Self {
         Self {
             left: self.left - size,
@@ -411,26 +437,32 @@ impl BoundingBox {
             && (point.y <= self.bottom)
     }
 
+    /// Width for this box.
     pub fn width(&self) -> Position {
         self.right.saturating_sub(self.left) + 1
     }
 
+    /// Height for this box.
     pub fn height(&self) -> Position {
         self.bottom.saturating_sub(self.top) + 1
     }
 
+    /// Left coordinate for this box.
     pub fn left(&self) -> Position {
         self.left
     }
 
+    /// Right coordinate for this box.
     pub fn right(&self) -> Position {
         self.right
     }
 
+    /// Top coordinate for this box.
     pub fn top(&self) -> Position {
         self.top
     }
 
+    /// Bottom coordinate for this box.
     pub fn bottom(&self) -> Position {
         self.bottom
     }
@@ -471,8 +503,29 @@ impl BoundingBox {
             py: 0,
         }
     }
+
+    /// Call a function which should write a single character at every position
+    /// in this bounding box.
+    ///
+    /// This function will handle newlines. The callback should print
+    /// a single character for each point.
+    pub fn printer<F>(&self, cb: F, f: &mut fmt::Formatter) -> fmt::Result
+    where
+        F: Fn(&mut fmt::Formatter, &Point) -> fmt::Result,
+    {
+        for y in self.vertical() {
+            for x in self.horizontal() {
+                let point = (x, y).into();
+                cb(f, &point)?;
+            }
+            writeln!(f, "")?;
+        }
+        Ok(())
+    }
 }
 
+/// Implements iteration over the points in a bounding
+/// box.
 pub struct BoundingBoxIterator<'b> {
     bbox: &'b BoundingBox,
     px: i32,

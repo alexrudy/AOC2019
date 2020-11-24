@@ -10,4 +10,5 @@ pub enum SearchError {
     StepLimitExhausted(usize),
 }
 
+/// Result when a search method might fail.
 pub type Result<T> = std::result::Result<T, SearchError>;

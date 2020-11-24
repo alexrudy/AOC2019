@@ -104,10 +104,18 @@ impl StepLimit {
     }
 }
 
+/// Options for the search algorithm.
 #[derive(Debug, Default)]
+#[non_exhaustive]
 pub struct SearchOptions {
     pub limit: Option<usize>,
     pub verbose: Option<usize>,
+}
+
+impl SearchOptions {
+    pub fn new() -> Self {
+        Self::default()
+    }
 }
 
 /// Implementation of search, using generic components.

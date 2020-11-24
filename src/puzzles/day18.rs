@@ -341,9 +341,10 @@ fn multisearch<'m>(map: &'m map::MultiMap) -> Result<MultiSpelunkPath, Error> {
 
         let origin = MultiSpelunker::new(map, grefs, entrances.clone());
 
-        let options = SearchOptions {
-            limit: None,
-            verbose: Some(10_000),
+        let options = {
+            let mut o = SearchOptions::default();
+            o.verbose = Some(10_000);
+            o
         };
 
         Ok(searcher::dijkstra::build(origin)
@@ -359,7 +360,7 @@ fn search<'m>(map: &'m map::Map) -> Result<SpelunkPath, Error> {
     let graph = map.graph(map.entrance().ok_or(anyhow!("No entrance?"))?);
     let origin = Spelunker::new(map, &graph);
 
-    Ok(searcher::dijkstra(origin).map(|c| c.path)?)
+    Ok(searcher::dijkstra::run(origin).map(|c| c.path)?)
 }
 
 mod map {

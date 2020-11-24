@@ -1,4 +1,8 @@
+//! Simple search algorithms
+
 pub mod bfs {
+    //! Breadth-first Search
+
     use std::collections::VecDeque;
     use std::default::Default;
 
@@ -55,6 +59,8 @@ pub mod bfs {
 }
 
 pub mod dfs {
+    //! Depth-first Search
+
     use std::collections::VecDeque;
     use std::default::Default;
 

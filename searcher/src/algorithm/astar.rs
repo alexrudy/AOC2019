@@ -1,3 +1,5 @@
+//! A* Search Algorithm
+
 use std::cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd};
 use std::collections::BinaryHeap;
 use std::default::Default;
@@ -60,6 +62,9 @@ where
     }
 }
 
+/// A priority queue which always returns the best-guess
+/// search candidate based on a heuristic from [SearchHeuristic]
+/// and so implements A* search.
 #[derive(Debug)]
 pub struct AStarQueue<S>
 where

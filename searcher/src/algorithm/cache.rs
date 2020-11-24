@@ -1,3 +1,5 @@
+//! Search cacheing support to eliminate already explored items.
+
 use std::collections::HashMap;
 use std::default::Default;
 use std::marker::PhantomData;
@@ -5,12 +7,14 @@ use std::marker::PhantomData;
 use crate::errors::Result;
 use crate::traits::{SearchCacher, SearchCandidate};
 
+/// Defines the behavior required of a search cache.
 pub trait Cache: Default {
     type Candidate: SearchCandidate;
 
     fn check(&mut self, candidate: &Self::Candidate) -> Result<bool>;
 }
 
+/// Provides no-op caching.
 #[derive(Debug)]
 pub struct NoCache<T>(PhantomData<T>);
 
@@ -31,6 +35,8 @@ where
     }
 }
 
+/// Provides a simple hashmap cache which
+/// will store every search state encountered.
 #[derive(Debug)]
 pub struct BasicCache<S>
 where

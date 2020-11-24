@@ -1,21 +1,29 @@
-//! Moudle for pathfinding in two dimensions
+//! Trait to define a map suitable for pathfinding
+//! on a 2D coordinate grid.
 use std::fmt;
 
-pub use super::path::Path;
+use super::path::Path;
 use super::pathfinder::Pathfinder;
 use super::Point;
 
-// Defines a map of locations
+/// Defines a map of locations on a coordinate grid.
+///
+/// The storage of the map is left to the implementing
+/// structure, this trait simply requires a map to
+/// return whether a given location is traversable.
+///
+/// Maps assume that traversal happens one square at
+/// a time in 2-D space.
 pub trait Map: Sized + fmt::Debug {
-    // Can the sprite step on this location on the path?
+    /// Can the sprite step on this location on the path?
     fn is_traversable(&self, location: Point) -> bool;
 
-    // Build a re-usable pathfinder for this map
+    /// Build a re-usable pathfinder for this map
     fn pathfinder(&self) -> Pathfinder<Self> {
         Pathfinder::new(self)
     }
 
-    // Build a path on this map
+    /// Build a path on this map
     fn path(&self, origin: Point, destination: Point) -> Option<Path> {
         self.pathfinder().find_path(origin, destination)
     }

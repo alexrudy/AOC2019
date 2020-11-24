@@ -1,4 +1,5 @@
-//! Moudle for pathfinding in two dimensions
+//! Pathfinding in two dimensions using dijkstra's algorithm
+
 use searcher::{dijkstra, SearchCacher, SearchCandidate};
 
 pub use super::map::Map;
@@ -74,6 +75,7 @@ where
     }
 }
 
+/// Implements pathfinding for a map.
 #[derive(Debug, Clone)]
 pub struct Pathfinder<'m, M> {
     map: &'m M,
@@ -83,8 +85,8 @@ impl<'m, M> Pathfinder<'m, M>
 where
     M: Map,
 {
-    /// Construct a new pathfinder with a pathifinding cache
-    pub fn new(map: &'m M) -> Self {
+    /// Construct a new pathfinder.
+    pub(crate) fn new(map: &'m M) -> Self {
         Self { map }
     }
 
@@ -97,7 +99,7 @@ where
         }
         let start = PathCandidate::start(origin, self.map, &destination);
 
-        dijkstra(start).ok().map(|c| c.path)
+        dijkstra::run(start).ok().map(|c| c.path)
     }
 }
 

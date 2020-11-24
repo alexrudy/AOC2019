@@ -1,3 +1,10 @@
+//! Graph decomposition for fast pathfinding
+//!
+//! For complex 2D maps, sometimes it is helpful
+//! to decompose the map into a graph, where each
+//! node is either a point of interest or a decision
+//! point, where path finding would have to make a turn.
+
 use std::collections::{HashMap, HashSet};
 
 use searcher::dijkstra;
@@ -6,10 +13,16 @@ use super::map::Map;
 use super::path::Path;
 use super::{Direction, Point};
 
+/// Additional methods required to use graph decomposition
+/// on a map. It is recommended that users override [Graphable::is_node].
 pub trait Graphable: Map {
+    /// Checks whether a point is a node in the graph.
+    ///
+    /// By default, nodes are decision points in a standard
+    /// 2D path, which means junctions or dead ends.
     fn is_node(&self, point: &Point) -> bool {
         let options = self.movement_options(point);
-        options == 1 || options > 2
+        options != 2
     }
 
     fn movement_options(&self, point: &Point) -> usize {
@@ -23,6 +36,9 @@ pub trait Graphable: Map {
     }
 }
 
+/// Wrapper structure for graphs which add points
+/// of interest as nodes along with junctions from
+/// the standard graph.
 #[derive(Debug)]
 pub struct GraphWithInterest<M>
 where
@@ -36,6 +52,7 @@ impl<M> GraphWithInterest<M>
 where
     M: Graphable,
 {
+    /// Create a new graph with points of interest from a map.
     pub fn new(map: M) -> Self {
         Self {
             map,
@@ -43,6 +60,8 @@ where
         }
     }
 
+    /// Add a point of interest to a map, which will be used as
+    /// a node.
     pub fn insert(&mut self, point: Point) -> bool {
         self.interest_points.insert(point)
     }
@@ -69,6 +88,7 @@ where
 #[derive(Debug, Eq, PartialEq, Hash, Copy, Clone)]
 struct Node(Point);
 
+/// A decomposition of a 2-d map into a graph.
 #[derive(Debug, Clone)]
 pub struct Graph<'m, M>
 where
@@ -82,10 +102,15 @@ impl<'m, M> Graph<'m, M>
 where
     M: Graphable,
 {
+    /// Does this graph contain this point as a node?
     pub fn contains(&self, point: &Point) -> bool {
-        self.nodes.contains_key(point)
+        self.nodes
+            .get(point)
+            .map(|m| !m.is_empty())
+            .unwrap_or(false)
     }
 
+    /// Add a new edge to the graph
     fn add_edge(&mut self, path: &Path) {
         self.nodes
             .entry(*path.origin())
@@ -110,6 +135,7 @@ where
             .or_insert_with(|| path.reversed());
     }
 
+    /// Create an empty graph
     fn empty(map: &'m M) -> Self {
         Self {
             map: map,
@@ -117,17 +143,18 @@ where
         }
     }
 
-    pub fn new(map: &'m M, origin: Point) -> Self {
-        let mut graph = Self::empty(map);
+    /// Explore a map starting at the given point,
+    /// adding appropriate edges to the graph.
+    pub fn explore(&mut self, origin: Point) {
         let mut queue = Vec::new();
         let mut visited = HashSet::new();
 
         queue.push(Path::new(origin));
 
         while let Some(path) = queue.pop() {
-            if map.is_node(&path.destination()) && path.distance() > 0 {
+            if self.map.is_node(&path.destination()) && path.distance() > 0 {
                 // We've found a node, stick an edge in both directions.
-                graph.add_edge(&path);
+                self.add_edge(&path);
 
                 if !visited.insert(*path.destination()) {
                     continue;
@@ -138,7 +165,7 @@ where
                 for d in Direction::all() {
                     if Some(d) != path.last_direction().map(|ld| ld.reverse()) {
                         let next = path.destination().step(d);
-                        if map.is_traversable(next) {
+                        if self.map.is_traversable(next) {
                             queue.push(stub.step(d))
                         }
                     }
@@ -151,14 +178,20 @@ where
                 for d in Direction::all() {
                     if Some(d) != path.last_direction().map(|ld| ld.reverse()) {
                         let next = path.destination().step(d);
-                        if map.is_traversable(next) {
+                        if self.map.is_traversable(next) {
                             queue.push(path.step(d))
                         }
                     }
                 }
             }
         }
+    }
 
+    /// Create a graph from a map and starting
+    /// point for exploration.
+    pub fn new(map: &'m M, origin: Point) -> Self {
+        let mut graph = Self::empty(map);
+        graph.explore(origin);
         graph
     }
 
@@ -182,7 +215,7 @@ where
         }
 
         let c = graphsearch::GraphPathCandidate::start(origin, &destination, &self);
-        dijkstra(c).ok().map(|c| self.expand_path(&c.path))
+        dijkstra::run(c).ok().map(|c| self.expand_path(&c.path))
     }
 
     fn expand_path(&self, graphpath: &graphsearch::GraphPath) -> Path {
