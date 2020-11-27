@@ -134,6 +134,7 @@ where
     results: BinaryHeap<Score<S>>,
     counter: Option<StepLimit>,
     options: SearchOptions,
+    origin: Option<S>,
 }
 
 impl<S, Q, C> SearchAlgorithm<S, Q, C>
@@ -151,8 +152,8 @@ where
             results: BinaryHeap::default(),
             counter: counter,
             options: options,
+            origin: Some(origin),
         };
-        sr.queue.push(origin);
         sr
     }
 
@@ -161,7 +162,10 @@ where
     }
 
     pub fn with_options(mut self, options: SearchOptions) -> Self {
-        let origin = self.queue.pop().unwrap();
+        let origin = self
+            .origin
+            .take()
+            .expect("Algorithm appears to have already started, no origin!");
 
         Self::new_with_options(origin, options)
     }
@@ -188,7 +192,7 @@ where
         // Scores can only increase in searches, if the best candidate
         // is better than our current guess, give up now.
         let score = candidate.score();
-        if score > self.best().map(|s| s.score()).unwrap_or(usize::MAX) {
+        if score >= self.best().map(|s| s.score()).unwrap_or(usize::MAX) {
             return Ok(None);
         }
 
@@ -205,27 +209,31 @@ where
     /// Run the search to completion.
     pub fn run(mut self) -> Result<S> {
         let mut n = 0;
+        let origin = self.origin.take().unwrap();
+
+        if let Some(c) = self.process_candidate(origin)? {
+            self.queue.push(c);
+        }
+
         while let Some(candidate) = self.queue.pop() {
             n += 1;
 
             let score = candidate.score();
-            let will_process = self.process_candidate(candidate)?;
 
             if self.show_debug_msg(n) {
                 eprintln!(
-                    "Q{} R{} S{:?} ({} {}) {}",
+                    "Q{} R{} S{:?} ({}) {}",
                     self.queue.len(),
                     self.results.len(),
                     self.best().map(|p| p.score()),
                     score,
-                    if will_process.is_some() { "y" } else { "n" },
                     n
                 );
             }
 
-            if let Some(candidate) = will_process {
-                for child in candidate.children() {
-                    self.queue.push(child);
+            for child in candidate.children() {
+                if let Some(c) = self.process_candidate(child)? {
+                    self.queue.push(c);
                 }
             }
             if self

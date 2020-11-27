@@ -94,7 +94,7 @@ where
 
 type AStarSearcher<S> = SearchAlgorithm<S, AStarQueue<S>, BasicCache<S>>;
 
-fn build<S>(origin: S) -> AStarSearcher<S>
+pub fn build<S>(origin: S) -> AStarSearcher<S>
 where
     S: SearchHeuristic + SearchCacher,
 {

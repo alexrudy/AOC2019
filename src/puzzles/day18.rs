@@ -32,7 +32,7 @@ impl<'m> pathfinder::Map for NoDoorMap<'m> {
 }
 
 #[derive(Debug, Eq, PartialEq, Hash, Clone)]
-pub(crate) struct SpelunkState(String, Point);
+pub(crate) struct SpelunkState(map::KeyRing, Point);
 
 #[derive(Debug, Clone)]
 pub(crate) struct SpelunkPath {
@@ -77,7 +77,7 @@ pub(crate) struct Spelunker<'m> {
 
 impl<'m> SearchCandidate for Spelunker<'m> {
     fn is_complete(&self) -> bool {
-        self.path.keys.len() == self.caves.keys().len()
+        self.path.keys.len() == self.caves.n_keys()
     }
 
     fn score(&self) -> usize {
@@ -93,7 +93,7 @@ impl<'m> SearchCacher for Spelunker<'m> {
     type State = SpelunkState;
 
     fn state(&self) -> SpelunkState {
-        SpelunkState(self.path.keys.state(), self.location().unwrap())
+        SpelunkState(self.path.keys.clone(), self.location().unwrap())
     }
 }
 
@@ -181,6 +181,7 @@ impl<'m> Spelunker<'m> {
     }
 }
 
+#[derive(Debug)]
 struct KeyPath(Vec<char>);
 
 impl ToString for KeyPath {
@@ -194,14 +195,21 @@ impl ToString for KeyPath {
 }
 
 #[derive(Debug, Eq, PartialEq, Hash, Clone)]
-pub(crate) struct MultiSpelunkState(String, [Point; 4]);
+pub(crate) struct MultiSpelunkState(map::KeyRing, [Point; 4]);
 
 #[derive(Debug, Clone)]
 pub(crate) struct MultiSpelunkPath {
+    /// Full set of keys collected.
     keys: map::KeyRing,
+    /// Order of keys collected
     path: Vec<char>,
+
+    /// Current node for each robot.
     locations: [Point; 4],
+    /// Total distance traveled.
     distance: usize,
+    /// Target robot to move next. If None, try all robots.
+    target_robot: Option<usize>,
 }
 
 impl MultiSpelunkPath {
@@ -211,6 +219,7 @@ impl MultiSpelunkPath {
             path: Vec::new(),
             locations: origins,
             distance: 0,
+            target_robot: None,
         }
     }
 
@@ -238,7 +247,7 @@ struct MultiSpelunker<'m> {
 
 impl<'m> SearchCandidate for MultiSpelunker<'m> {
     fn is_complete(&self) -> bool {
-        self.path.keys.len() == self.caves.keys().len()
+        self.path.keys.len() == self.caves.n_keys()
     }
 
     fn score(&self) -> usize {
@@ -254,7 +263,24 @@ impl<'m> SearchCacher for MultiSpelunker<'m> {
     type State = MultiSpelunkState;
 
     fn state(&self) -> MultiSpelunkState {
-        MultiSpelunkState(self.path.keys.state(), self.path.locations)
+        MultiSpelunkState(self.path.keys.clone(), self.path.locations)
+    }
+}
+
+impl<'m> SearchHeuristic for MultiSpelunker<'m> {
+    fn heuristic(&self) -> usize {
+        if self.path.keys.len() == 0 {
+            return 5000 + self.path.distance;
+        }
+
+        let keys = self.caves.n_keys();
+        let remaining = keys - self.path.keys.len();
+
+        let per_key = self.path.distance / self.path.keys.len();
+
+        let guess = per_key * remaining;
+
+        self.path.distance + guess * 4
     }
 }
 
@@ -271,46 +297,79 @@ impl<'m> MultiSpelunker<'m> {
         }
     }
 
+    fn travel_to(
+        &self,
+        robot: usize,
+        tile: Option<map::Tile>,
+        path: &pathfinder::Path,
+        destination: &Point,
+    ) -> Option<Self> {
+        match tile {
+            Some(map::Tile::Key(c)) => {
+                let mut newsp = self.clone();
+                newsp.path.target_robot = None;
+                newsp.path.found_key(c);
+                newsp.path.locations[robot] = *destination;
+                newsp.path.distance += path.distance();
+                Some(newsp)
+            }
+            Some(map::Tile::Door(c)) if self.path.keys.contains(&c) => {
+                let mut newsp = self.clone();
+                newsp.path.target_robot = Some(robot);
+                newsp.path.locations[robot] = *destination;
+                newsp.path.distance += path.distance();
+                Some(newsp)
+            }
+            Some(map::Tile::Entrance) => {
+                let mut newsp = self.clone();
+                newsp.path.target_robot = Some(robot);
+                newsp.path.locations[robot] = *destination;
+                newsp.path.distance += path.distance();
+                Some(newsp)
+            }
+            Some(map::Tile::Hall) => {
+                let mut newsp = self.clone();
+                newsp.path.target_robot = Some(robot);
+                newsp.path.locations[robot] = *destination;
+                newsp.path.distance += path.distance();
+                Some(newsp)
+            }
+            None => None,
+            Some(map::Tile::Door(_)) => None,
+        }
+    }
+
+    fn candidates_for_robot(
+        &self,
+        robot: usize,
+        location: &Point,
+        graph: &'m graph::Graph<'m, map::MultiMap>,
+    ) -> Vec<MultiSpelunker<'m>> {
+        let mut candidates = Vec::new();
+
+        for (point, path) in graph.edges(*location) {
+            if let Some(c) = self.travel_to(robot, self.caves.get(*point), path, point) {
+                candidates.push(c);
+            }
+        }
+
+        candidates
+    }
+
     fn candidates(&self) -> Vec<MultiSpelunker<'m>> {
         let mut candidates = Vec::new();
 
-        for (i, (location, graph)) in self
-            .path
-            .locations
-            .iter()
-            .zip(self.graphs.iter())
-            .enumerate()
-        {
-            for (point, path) in graph.edges(*location) {
-                match self.caves.get(*point) {
-                    Some(map::Tile::Key(c)) => {
-                        let mut newsp = self.clone();
-                        newsp.path.found_key(c);
-                        newsp.path.locations[i] = *point;
-                        newsp.path.distance += path.distance();
-                        candidates.push(newsp);
-                    }
-                    Some(map::Tile::Door(c)) if self.path.keys.contains(&c) => {
-                        let mut newsp = self.clone();
-                        newsp.path.locations[i] = *point;
-                        newsp.path.distance += path.distance();
-                        candidates.push(newsp);
-                    }
-                    Some(map::Tile::Entrance) => {
-                        let mut newsp = self.clone();
-                        newsp.path.locations[i] = *point;
-                        newsp.path.distance += path.distance();
-                        candidates.push(newsp);
-                    }
-                    Some(map::Tile::Door(_)) => {}
-                    Some(map::Tile::Hall) => {
-                        let mut newsp = self.clone();
-                        newsp.path.locations[i] = *point;
-                        newsp.path.distance += path.distance();
-                        candidates.push(newsp);
-                    }
-                    None => {}
-                }
+        if let Some(i) = self.path.target_robot {
+            candidates.extend(self.candidates_for_robot(i, &self.path.locations[i], self.graphs[i]))
+        } else {
+            for (i, (location, graph)) in self
+                .path
+                .locations
+                .iter()
+                .zip(self.graphs.iter())
+                .enumerate()
+            {
+                candidates.extend(self.candidates_for_robot(i, location, graph));
             }
         }
 
@@ -356,11 +415,21 @@ fn multisearch<'m>(map: &'m map::MultiMap) -> Result<MultiSpelunkPath, Error> {
 
 fn search<'m>(map: &'m map::Map) -> Result<SpelunkPath, Error> {
     use geometry::coord2d::graph::Graphable;
+    use searcher::SearchOptions;
 
     let graph = map.graph(map.entrance().ok_or(anyhow!("No entrance?"))?);
     let origin = Spelunker::new(map, &graph);
 
-    Ok(searcher::dijkstra::run(origin).map(|c| c.path)?)
+    let options = {
+        let mut o = SearchOptions::default();
+        o.verbose = Some(10_000);
+        o
+    };
+
+    Ok(searcher::dijkstra::build(origin)
+        .with_options(options)
+        .run()
+        .map(|c| c.path)?)
 }
 
 mod map {
@@ -372,7 +441,7 @@ mod map {
 
     use lazy_static::lazy_static;
 
-    use std::collections::{HashMap, HashSet};
+    use std::collections::{BTreeSet, HashMap, HashSet};
     use std::convert::{TryFrom, TryInto};
     use std::str::FromStr;
 
@@ -384,6 +453,15 @@ mod map {
         Entrance,
         Door(char),
         Key(char),
+    }
+
+    impl Tile {
+        fn is_key(&self) -> bool {
+            match self {
+                Tile::Key(_) => true,
+                _ => false,
+            }
+        }
     }
 
     impl TryFrom<char> for Tile {
@@ -403,8 +481,8 @@ mod map {
         }
     }
 
-    #[derive(Debug, Default, Clone, Eq, PartialEq)]
-    pub(crate) struct KeyRing(HashSet<char>);
+    #[derive(Debug, Default, Clone, Eq, PartialEq, Hash)]
+    pub(crate) struct KeyRing(BTreeSet<char>);
 
     impl KeyRing {
         pub(crate) fn insert(&mut self, key: char) -> bool {
@@ -415,12 +493,6 @@ mod map {
             self.0.contains(key)
         }
 
-        pub(crate) fn state(&self) -> String {
-            let mut keys: Vec<&char> = self.0.iter().collect();
-            keys.sort();
-            keys.into_iter().collect()
-        }
-
         pub(crate) fn len(&self) -> usize {
             self.0.len()
         }
@@ -429,6 +501,7 @@ mod map {
     #[derive(Debug, Clone, Default)]
     pub(crate) struct Map {
         tiles: HashMap<Point, Tile>,
+        n_keys: usize,
     }
 
     impl FromStr for Map {
@@ -453,10 +526,13 @@ mod map {
 
     impl Map {
         fn new(tiles: HashMap<Point, Tile>) -> Self {
-            Map {
-                tiles,
-                ..Map::default()
-            }
+            let n_keys = tiles.values().filter(|t| t.is_key()).count();
+
+            Map { tiles, n_keys }
+        }
+
+        pub(crate) fn n_keys(&self) -> usize {
+            self.n_keys
         }
 
         pub(crate) fn keys(&self) -> HashSet<Key> {
@@ -488,7 +564,7 @@ mod map {
                 Some(Tile::Door(_)) => true,
                 Some(Tile::Key(_)) => true,
                 Some(Tile::Entrance) => true,
-                Some(Tile::Hall) => options == 1 || options > 2,
+                Some(Tile::Hall) => false,
                 None => false,
             }
         }
@@ -552,12 +628,12 @@ mod map {
             MultiMap(map, overrides, entrances)
         }
 
-        pub(crate) fn entrances(&self) -> &[Point; 4] {
-            &self.2
+        pub(crate) fn n_keys(&self) -> usize {
+            self.0.n_keys
         }
 
-        pub(crate) fn keys(&self) -> HashSet<Key> {
-            self.0.keys()
+        pub(crate) fn entrances(&self) -> &[Point; 4] {
+            &self.2
         }
 
         pub(crate) fn get(&self, location: Point) -> Option<Tile> {
@@ -570,12 +646,11 @@ mod map {
 
     impl graph::Graphable for MultiMap {
         fn is_node(&self, point: &Point) -> bool {
-            let options = self.movement_options(point);
             match self.get(*point) {
                 Some(Tile::Door(_)) => true,
                 Some(Tile::Key(_)) => true,
                 Some(Tile::Entrance) => true,
-                Some(Tile::Hall) => options == 1 || options > 2,
+                Some(Tile::Hall) => false,
                 None => false,
             }
         }
@@ -597,19 +672,19 @@ pub(crate) fn main(mut input: Box<dyn Read + 'static>) -> ::std::result::Result<
 
     {
         let start = time::Instant::now();
+        let mm = map::MultiMap::new(map.clone());
 
-        let sp = search(&map)?;
-        println!("Part 1: {}", sp.distance());
+        let sp = multisearch(&mm)?;
+        println!("Part 2: {}", sp.distance());
         println!("  Keys: {}", sp.keys().to_string());
         println!("  Time: {}s", start.elapsed().as_secs());
     }
 
     {
         let start = time::Instant::now();
-        let mm = map::MultiMap::new(map);
 
-        let sp = multisearch(&mm)?;
-        println!("Part 2: {}", sp.distance());
+        let sp = search(&map)?;
+        println!("Part 1: {}", sp.distance());
         println!("  Keys: {}", sp.keys().to_string());
         println!("  Time: {}s", start.elapsed().as_secs());
     }
@@ -721,6 +796,7 @@ mod test {
         .unwrap();
 
         let sp = search(&map).unwrap();
+        eprintln!("{}", sp.keys().to_string());
         assert_eq!(sp.distance(), 81);
     }
 

@@ -156,22 +156,20 @@ where
                 // We've found a node, stick an edge in both directions.
                 self.add_edge(&path);
 
-                if !visited.insert(*path.destination()) {
+                if !visited.insert((*path.origin(), *path.destination())) {
                     continue;
                 }
 
                 let stub = Path::new(*path.destination());
 
                 for d in Direction::all() {
-                    if Some(d) != path.last_direction().map(|ld| ld.reverse()) {
-                        let next = path.destination().step(d);
-                        if self.map.is_traversable(next) {
-                            queue.push(stub.step(d))
-                        }
+                    let next = path.destination().step(d);
+                    if self.map.is_traversable(next) {
+                        queue.push(stub.step(d))
                     }
                 }
             } else {
-                if !visited.insert(*path.destination()) {
+                if !visited.insert((*path.origin(), *path.destination())) {
                     continue;
                 }
 
