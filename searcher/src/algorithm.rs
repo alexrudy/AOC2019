@@ -3,6 +3,7 @@
 use std::cmp::{Ord, Ordering, PartialOrd};
 use std::collections::BinaryHeap;
 use std::default::Default;
+use std::time;
 
 use self::cache::Cache;
 use crate::errors::{Result, SearchError};
@@ -79,14 +80,46 @@ where
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
+struct TimeLimit {
+    start: Option<time::Instant>,
+    maximum: Option<time::Duration>,
+}
+
+impl TimeLimit {
+    fn new(limit: Option<time::Duration>) -> Self {
+        Self {
+            start: None,
+            maximum: limit,
+        }
+    }
+
+    fn increment(&mut self) -> Result<()> {
+        if self.start.is_none() {
+            self.start = Some(time::Instant::now());
+        }
+        if self
+            .start
+            .map(|s| self.maximum.map(|m| s.elapsed() > m).unwrap_or(false))
+            .unwrap_or(false)
+        {
+            Err(SearchError::TimeLimitExhausted(
+                self.start.unwrap().elapsed(),
+            ))
+        } else {
+            Ok(())
+        }
+    }
+}
+
+#[derive(Debug, Default)]
 struct StepLimit {
     current: usize,
-    maximum: usize,
+    maximum: Option<usize>,
 }
 
 impl StepLimit {
-    fn new(limit: usize) -> Self {
+    fn new(limit: Option<usize>) -> Self {
         Self {
             current: 0,
             maximum: limit,
@@ -96,7 +129,7 @@ impl StepLimit {
     fn increment(&mut self) -> Result<()> {
         self.current += 1;
 
-        if self.current >= self.maximum {
+        if self.maximum.map(|v| self.current >= v).unwrap_or(false) {
             Err(SearchError::StepLimitExhausted(self.current))
         } else {
             Ok(())
@@ -109,7 +142,9 @@ impl StepLimit {
 #[non_exhaustive]
 pub struct SearchOptions {
     pub limit: Option<usize>,
+    pub maxtime: Option<time::Duration>,
     pub verbose: Option<usize>,
+    pub exhaustive: bool,
 }
 
 impl SearchOptions {
@@ -132,7 +167,8 @@ where
     cache: C,
     queue: Q,
     results: BinaryHeap<Score<S>>,
-    counter: Option<StepLimit>,
+    counter: StepLimit,
+    timer: TimeLimit,
     options: SearchOptions,
     origin: Option<S>,
 }
@@ -144,13 +180,15 @@ where
     C: Cache<Candidate = S>,
 {
     fn new_with_options(origin: S, options: SearchOptions) -> Self {
-        let counter = options.limit.map(|l| StepLimit::new(l));
+        let counter = StepLimit::new(options.limit);
+        let timer = TimeLimit::new(options.maxtime);
 
-        let mut sr = SearchAlgorithm {
+        let sr = SearchAlgorithm {
             cache: C::default(),
             queue: Q::default(),
             results: BinaryHeap::default(),
             counter: counter,
+            timer: timer,
             options: options,
             origin: Some(origin),
         };
@@ -177,10 +215,8 @@ where
     // Should we continue searching from this candidate?
     fn process_candidate(&mut self, candidate: S) -> Result<Option<S>> {
         // Increment the step counter
-        self.counter
-            .as_mut()
-            .map(|c| c.increment())
-            .unwrap_or(Ok(()))?;
+        self.counter.increment()?;
+        self.timer.increment()?;
 
         // If we found an answer, we can stop hunting now
         // and add the answer to our search results.
@@ -236,10 +272,11 @@ where
                     self.queue.push(c);
                 }
             }
-            if self
-                .best()
-                .map(|c| self.queue.can_terminate(c))
-                .unwrap_or(false)
+            if !self.options.exhaustive
+                && self
+                    .best()
+                    .map(|c| self.queue.can_terminate(c))
+                    .unwrap_or(false)
             {
                 break;
             }

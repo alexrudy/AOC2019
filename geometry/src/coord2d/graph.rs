@@ -88,20 +88,12 @@ where
 #[derive(Debug, Eq, PartialEq, Hash, Copy, Clone)]
 struct Node(Point);
 
-/// A decomposition of a 2-d map into a graph.
 #[derive(Debug, Clone)]
-pub struct Graph<'m, M>
-where
-    M: Graphable,
-{
+pub struct RawGraph {
     nodes: HashMap<Point, HashMap<Point, Path>>,
-    map: &'m M,
 }
 
-impl<'m, M> Graph<'m, M>
-where
-    M: Graphable,
-{
+impl RawGraph {
     /// Does this graph contain this point as a node?
     pub fn contains(&self, point: &Point) -> bool {
         self.nodes
@@ -135,11 +127,89 @@ where
             .or_insert_with(|| path.reversed());
     }
 
+    /// Number of nodes
+    pub fn len(&self) -> usize {
+        self.nodes.len()
+    }
+
+    pub fn nodes(&self) -> impl Iterator<Item = &Point> {
+        self.nodes.keys()
+    }
+
+    /// Create an empty graph
+    fn new() -> Self {
+        Self {
+            nodes: HashMap::new(),
+        }
+    }
+
+    /// Iterate through the edges of a graph which connect to this node.
+    pub fn edges(&self, location: Point) -> impl Iterator<Item = (&Point, &Path)> {
+        self.nodes
+            .get(&location)
+            .expect(&format!("{:?} is not a node", location))
+            .iter()
+    }
+
+    /// Find a path within the graph.
+    ///
+    /// Returns None when no path can be found, or when origin or destination
+    /// are not nodes in the graph.
+    pub fn find_path(&self, origin: Point, destination: Point) -> Option<Path> {
+        // Chech that start and endpoints are nodes.
+        // TODO: Could dynamically add nodes to the graph as new options appear?
+        if !(self.nodes.contains_key(&origin) && self.nodes.contains_key(&destination)) {
+            return None;
+        }
+
+        let c = graphsearch::GraphPathCandidate::start(origin, &destination, &self);
+        dijkstra::run(c).ok().map(|c| self.expand_path(&c.path))
+    }
+
+    fn expand_path(&self, graphpath: &graphsearch::GraphPath) -> Path {
+        let mut path = Vec::new();
+        let mut location = *graphpath.nodes.first().unwrap();
+        path.push(location);
+
+        for node in graphpath.nodes.iter().skip(1) {
+            let nodepath = self.nodes.get(&location).unwrap().get(node).unwrap();
+            path.extend(nodepath.iter().skip(1));
+            location = *node;
+        }
+
+        path.into()
+    }
+}
+
+/// A decomposition of a 2-d map into a graph.
+#[derive(Debug, Clone)]
+pub struct Graph<'m, M>
+where
+    M: Graphable,
+{
+    nodes: RawGraph,
+    map: &'m M,
+}
+
+impl<'m, M> Graph<'m, M>
+where
+    M: Graphable,
+{
+    /// Does this graph contain this point as a node?
+    pub fn contains(&self, point: &Point) -> bool {
+        self.nodes.contains(point)
+    }
+
+    /// Add a new edge to the graph
+    fn add_edge(&mut self, path: &Path) {
+        self.nodes.add_edge(path)
+    }
+
     /// Create an empty graph
     fn empty(map: &'m M) -> Self {
         Self {
             map: map,
-            nodes: HashMap::new(),
+            nodes: RawGraph::new(),
         }
     }
 
@@ -152,7 +222,9 @@ where
         queue.push(Path::new(origin));
 
         while let Some(path) = queue.pop() {
-            if self.map.is_node(&path.destination()) && path.distance() > 0 {
+            if (self.map.is_node(&path.destination()) || path.destination() == &origin)
+                && path.distance() > 0
+            {
                 // We've found a node, stick an edge in both directions.
                 self.add_edge(&path);
 
@@ -195,10 +267,7 @@ where
 
     /// Iterate through the edges of a graph which connect to this node.
     pub fn edges(&self, location: Point) -> impl Iterator<Item = (&Point, &Path)> {
-        self.nodes
-            .get(&location)
-            .expect(&format!("{:?} is not a node", location))
-            .iter()
+        self.nodes.edges(location)
     }
 
     /// Find a path within the graph.
@@ -206,28 +275,15 @@ where
     /// Returns None when no path can be found, or when origin or destination
     /// are not nodes in the graph.
     pub fn find_path(&self, origin: Point, destination: Point) -> Option<Path> {
-        // Chech that start and endpoints are nodes.
-        // TODO: Could dynamically add nodes to the graph as new options appear?
-        if !(self.nodes.contains_key(&origin) && self.nodes.contains_key(&destination)) {
-            return None;
-        }
-
-        let c = graphsearch::GraphPathCandidate::start(origin, &destination, &self);
-        dijkstra::run(c).ok().map(|c| self.expand_path(&c.path))
+        self.nodes.find_path(origin, destination)
     }
 
-    fn expand_path(&self, graphpath: &graphsearch::GraphPath) -> Path {
-        let mut path = Vec::new();
-        let mut location = *graphpath.nodes.first().unwrap();
-        path.push(location);
-
-        for node in graphpath.nodes.iter().skip(1) {
-            let nodepath = self.nodes.get(&location).unwrap().get(node).unwrap();
-            path.extend(nodepath.iter().skip(1));
-            location = *node;
-        }
-
-        path.into()
+    /// Return the raw graph, divorcing from the underlying map.
+    ///
+    /// Raw graphs do not track the lifetime or availability of the underlying
+    /// map, and so can produce paths which are no longer valid.
+    pub fn raw(self) -> RawGraph {
+        self.nodes
     }
 }
 
@@ -235,7 +291,7 @@ mod graphsearch {
 
     use searcher::{SearchCacher, SearchCandidate};
 
-    use super::{Graph, Graphable, Point};
+    use super::{Point, RawGraph};
 
     #[derive(Debug)]
     pub(crate) struct GraphPath {
@@ -275,24 +331,14 @@ mod graphsearch {
     }
 
     #[derive(Debug)]
-    pub(crate) struct GraphPathCandidate<'m, M>
-    where
-        M: Graphable,
-    {
+    pub(crate) struct GraphPathCandidate<'m> {
         pub(crate) path: GraphPath,
         destination: &'m Point,
-        graph: &'m Graph<'m, M>,
+        graph: &'m RawGraph,
     }
 
-    impl<'m, M> GraphPathCandidate<'m, M>
-    where
-        M: Graphable,
-    {
-        pub(crate) fn start(
-            origin: Point,
-            destination: &'m Point,
-            graph: &'m Graph<'m, M>,
-        ) -> Self {
+    impl<'m> GraphPathCandidate<'m> {
+        pub(crate) fn start(origin: Point, destination: &'m Point, graph: &'m RawGraph) -> Self {
             Self {
                 path: GraphPath::new(origin),
                 destination: destination,
@@ -309,10 +355,7 @@ mod graphsearch {
         }
     }
 
-    impl<'m, M> SearchCandidate for GraphPathCandidate<'m, M>
-    where
-        M: Graphable,
-    {
+    impl<'m> SearchCandidate for GraphPathCandidate<'m> {
         fn score(&self) -> usize {
             self.path.distance
         }
@@ -336,10 +379,7 @@ mod graphsearch {
         }
     }
 
-    impl<'m, M> SearchCacher for GraphPathCandidate<'m, M>
-    where
-        M: Graphable,
-    {
+    impl<'m> SearchCacher for GraphPathCandidate<'m> {
         type State = Point;
 
         fn state(&self) -> Self::State {
