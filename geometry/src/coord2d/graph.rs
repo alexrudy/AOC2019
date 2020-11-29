@@ -289,11 +289,12 @@ where
 
 mod graphsearch {
 
-    use searcher::{SearchCacher, SearchCandidate};
+    use searcher::{SearchCacher, SearchCandidate, SearchState};
+    use std::cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd};
 
     use super::{Point, RawGraph};
 
-    #[derive(Debug)]
+    #[derive(Debug, Clone)]
     pub(crate) struct GraphPath {
         pub(crate) nodes: Vec<Point>,
         distance: usize,
@@ -330,7 +331,7 @@ mod graphsearch {
         }
     }
 
-    #[derive(Debug)]
+    #[derive(Debug, Clone)]
     pub(crate) struct GraphPathCandidate<'m> {
         pub(crate) path: GraphPath,
         destination: &'m Point,
@@ -355,11 +356,27 @@ mod graphsearch {
         }
     }
 
-    impl<'m> SearchCandidate for GraphPathCandidate<'m> {
-        fn score(&self) -> usize {
-            self.path.distance
+    impl<'m> Ord for GraphPathCandidate<'m> {
+        fn cmp(&self, other: &Self) -> Ordering {
+            self.path.distance.cmp(&other.path.distance).reverse()
         }
+    }
 
+    impl<'m> PartialOrd for GraphPathCandidate<'m> {
+        fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+            Some(self.cmp(other))
+        }
+    }
+
+    impl<'m> PartialEq for GraphPathCandidate<'m> {
+        fn eq(&self, other: &Self) -> bool {
+            self.path.distance.eq(&other.path.distance)
+        }
+    }
+
+    impl<'m> Eq for GraphPathCandidate<'m> {}
+
+    impl<'m> SearchCandidate for GraphPathCandidate<'m> {
         fn is_complete(&self) -> bool {
             self.destination == self.path.destination()
         }
@@ -379,11 +396,19 @@ mod graphsearch {
         }
     }
 
-    impl<'m> SearchCacher for GraphPathCandidate<'m> {
+    impl<'m> SearchState for GraphPathCandidate<'m> {
         type State = Point;
 
         fn state(&self) -> Self::State {
             *self.path.destination()
+        }
+    }
+
+    impl<'m> SearchCacher for GraphPathCandidate<'m> {
+        type Value = usize;
+
+        fn value(&self) -> Self::Value {
+            self.path.distance
         }
     }
 }

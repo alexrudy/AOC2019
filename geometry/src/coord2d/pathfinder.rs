@@ -1,6 +1,8 @@
 //! Pathfinding in two dimensions using dijkstra's algorithm
+use std::clone::Clone;
+use std::cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd};
 
-use searcher::{dijkstra, SearchCacher, SearchCandidate};
+use searcher::{dijkstra, SearchCacher, SearchCandidate, SearchState};
 
 pub use super::map::Map;
 pub use super::path::Path;
@@ -14,6 +16,36 @@ struct PathCandidate<'m, M> {
     map: &'m M,
     target: &'m Point,
 }
+
+impl<'m, M> Clone for PathCandidate<'m, M> {
+    fn clone(&self) -> Self {
+        PathCandidate {
+            path: self.path.clone(),
+            map: self.map,
+            target: self.target,
+        }
+    }
+}
+
+impl<'m, M> Ord for PathCandidate<'m, M> {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.path.distance().cmp(&other.path.distance()).reverse()
+    }
+}
+
+impl<'m, M> PartialOrd for PathCandidate<'m, M> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl<'m, M> PartialEq for PathCandidate<'m, M> {
+    fn eq(&self, other: &Self) -> bool {
+        self.path.distance().eq(&other.path.distance())
+    }
+}
+
+impl<'m, M> Eq for PathCandidate<'m, M> {}
 
 impl<'m, M> PathCandidate<'m, M>
 where
@@ -40,10 +72,6 @@ impl<'m, M> SearchCandidate for PathCandidate<'m, M>
 where
     M: Map,
 {
-    fn score(&self) -> usize {
-        self.path.distance()
-    }
-
     fn is_complete(&self) -> bool {
         self.path.destination() == self.target
     }
@@ -63,8 +91,7 @@ where
         paths
     }
 }
-
-impl<'m, M> SearchCacher for PathCandidate<'m, M>
+impl<'m, M> SearchState for PathCandidate<'m, M>
 where
     M: Map,
 {
@@ -72,6 +99,17 @@ where
 
     fn state(&self) -> Self::State {
         *self.path.destination()
+    }
+}
+
+impl<'m, M> SearchCacher for PathCandidate<'m, M>
+where
+    M: Map,
+{
+    type Value = usize;
+
+    fn value(&self) -> Self::Value {
+        self.path.distance()
     }
 }
 

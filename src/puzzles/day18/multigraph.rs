@@ -8,8 +8,10 @@ use geometry::coord2d::graph;
 use geometry::coord2d::map::Map;
 use geometry::coord2d::pathfinder;
 use geometry::coord2d::Point;
-use searcher::SearchCacher;
+use searcher::Score;
 use searcher::SearchCandidate;
+use searcher::SearchScore;
+use searcher::SearchState;
 
 use super::map;
 use super::multi::{MultiSpelunkPath, MultiSpelunkState};
@@ -179,13 +181,16 @@ impl<'m> MultiGraphSpelunker<'m> {
     }
 }
 
+impl<'m> SearchScore for MultiGraphSpelunker<'m> {
+    type Score = usize;
+    fn score(&self) -> Self::Score {
+        self.distance()
+    }
+}
+
 impl<'m> SearchCandidate for MultiGraphSpelunker<'m> {
     fn is_complete(&self) -> bool {
         self.path.keyring().len() == self.map.n_keys()
-    }
-
-    fn score(&self) -> usize {
-        self.distance()
     }
 
     fn children(&self) -> Vec<Self> {
@@ -193,7 +198,7 @@ impl<'m> SearchCandidate for MultiGraphSpelunker<'m> {
     }
 }
 
-impl<'m> SearchCacher for MultiGraphSpelunker<'m> {
+impl<'m> SearchState for MultiGraphSpelunker<'m> {
     type State = MultiSpelunkState;
 
     fn state(&self) -> MultiSpelunkState {
@@ -208,7 +213,8 @@ pub(crate) fn search<'m>(map: &'m map::MultiMap) -> Result<MultiSpelunkPath, Err
         let graphs = MultiGraphs::new(map);
         let entrances = map.entrances();
 
-        let origin = MultiGraphSpelunker::new(map, &graphs, entrances.clone());
+        let origin: Score<MultiGraphSpelunker> =
+            MultiGraphSpelunker::new(map, &graphs, entrances.clone()).into();
 
         let options = {
             let mut o = SearchOptions::default();
@@ -220,6 +226,6 @@ pub(crate) fn search<'m>(map: &'m map::MultiMap) -> Result<MultiSpelunkPath, Err
         Ok(searcher::dijkstra::build(origin)
             .with_options(options)
             .run()
-            .map(|c| c.path)?)
+            .map(|c| c.unwrap().path)?)
     }
 }

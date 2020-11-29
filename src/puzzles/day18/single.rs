@@ -6,7 +6,7 @@ use anyhow::{anyhow, Error};
 use geometry::coord2d::graph;
 use geometry::coord2d::pathfinder;
 use geometry::coord2d::Point;
-use searcher::{self, SearchCacher, SearchCandidate, SearchHeuristic};
+use searcher::{self, Score, SearchCandidate, SearchHeuristic, SearchScore, SearchState};
 
 use super::map;
 use super::KeyPath;
@@ -69,16 +69,19 @@ impl<'m> SearchCandidate for Spelunker<'m> {
         self.path.keys.len() == self.map.n_keys()
     }
 
-    fn score(&self) -> usize {
-        self.distance()
-    }
-
     fn children(&self) -> Vec<Self> {
         self.candidates().unwrap()
     }
 }
 
-impl<'m> SearchCacher for Spelunker<'m> {
+impl<'m> SearchScore for Spelunker<'m> {
+    type Score = usize;
+    fn score(&self) -> Self::Score {
+        self.distance()
+    }
+}
+
+impl<'m> SearchState for Spelunker<'m> {
     type State = SpelunkState;
 
     fn state(&self) -> SpelunkState {
@@ -87,6 +90,8 @@ impl<'m> SearchCacher for Spelunker<'m> {
 }
 
 impl<'m> SearchHeuristic for Spelunker<'m> {
+    type Hueristic = usize;
+
     fn heuristic(&self) -> usize {
         if let Some(h) = self.heuristic.get() {
             return h;
@@ -175,7 +180,7 @@ pub(crate) fn search<'m>(map: &'m map::Map) -> Result<SpelunkPath, Error> {
     use searcher::SearchOptions;
 
     let graph = map.graph(map.entrance().ok_or(anyhow!("No entrance?"))?);
-    let origin = Spelunker::new(map, &graph);
+    let origin: Score<Spelunker> = Spelunker::new(map, &graph).into();
 
     let options = {
         let mut o = SearchOptions::default();
@@ -186,5 +191,5 @@ pub(crate) fn search<'m>(map: &'m map::Map) -> Result<SpelunkPath, Error> {
     Ok(searcher::dijkstra::build(origin)
         .with_options(options)
         .run()
-        .map(|c| c.path)?)
+        .map(|c| c.unwrap().path)?)
 }

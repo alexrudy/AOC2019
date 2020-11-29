@@ -2,7 +2,7 @@ use anyhow::{anyhow, Error};
 use geometry::coord2d::graph;
 use geometry::coord2d::pathfinder;
 use geometry::coord2d::Point;
-use searcher::{self, SearchCacher, SearchCandidate, SearchHeuristic};
+use searcher::{self, Score, SearchCandidate, SearchScore, SearchState};
 
 use std::cmp::{Eq, PartialEq};
 
@@ -108,37 +108,24 @@ impl<'m> SearchCandidate for MultiSpelunker<'m> {
         self.path.keys.len() == self.map.n_keys()
     }
 
-    fn score(&self) -> usize {
-        self.distance()
-    }
-
     fn children(&self) -> Vec<Self> {
         self.candidates()
     }
 }
 
-impl<'m> SearchCacher for MultiSpelunker<'m> {
+impl<'m> SearchScore for MultiSpelunker<'m> {
+    type Score = usize;
+
+    fn score(&self) -> usize {
+        self.distance()
+    }
+}
+
+impl<'m> SearchState for MultiSpelunker<'m> {
     type State = MultiSpelunkState;
 
     fn state(&self) -> MultiSpelunkState {
         MultiSpelunkState(self.path.keys.clone(), self.path.locations)
-    }
-}
-
-impl<'m> SearchHeuristic for MultiSpelunker<'m> {
-    fn heuristic(&self) -> usize {
-        if self.path.keys.len() == 0 {
-            return 5000 + self.path.distance;
-        }
-
-        let keys = self.map.n_keys();
-        let remaining = keys - self.path.keys.len();
-
-        let per_key = self.path.distance / self.path.keys.len();
-
-        let guess = per_key * remaining;
-
-        self.path.distance + guess * 4
     }
 }
 
@@ -231,7 +218,8 @@ pub(crate) fn search<'m>(map: &'m map::MultiMap) -> Result<MultiSpelunkPath, Err
             .try_into()
             .map_err(|_| anyhow!("Can't form graph ref"))?;
 
-        let origin = MultiSpelunker::new(map, grefs, entrances.clone());
+        let origin: Score<MultiSpelunker> =
+            MultiSpelunker::new(map, grefs, entrances.clone()).into();
 
         let options = {
             let mut o = SearchOptions::default();
@@ -242,6 +230,6 @@ pub(crate) fn search<'m>(map: &'m map::MultiMap) -> Result<MultiSpelunkPath, Err
         Ok(searcher::dijkstra::build(origin)
             .with_options(options)
             .run()
-            .map(|c| c.path)?)
+            .map(|c| c.unwrap().path)?)
     }
 }

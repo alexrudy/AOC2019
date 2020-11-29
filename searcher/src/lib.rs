@@ -5,13 +5,17 @@
 
 pub mod algorithm;
 mod errors;
+pub mod graph;
 mod traits;
 
+pub use algorithm::score::Score;
 pub use errors::Result as SearchResult;
 pub use errors::SearchError;
 pub use traits::SearchCacher;
 pub use traits::SearchCandidate;
 pub use traits::SearchHeuristic;
+pub use traits::SearchScore;
+pub use traits::SearchState;
 
 pub use algorithm::astar;
 pub use algorithm::basic::bfs;
