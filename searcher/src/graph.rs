@@ -1,33 +1,40 @@
 //! Graph decomposition and datastructures.
 
-use std::cmp::{Ord, Ordering, PartialEq, PartialOrd};
-use std::collections::HashMap;
-use std::convert::{From, Into};
+use std::cmp::PartialEq;
+use std::collections::{HashMap, HashSet};
+use std::convert::Into;
 use std::fmt::Debug;
 use std::hash::Hash;
+use std::iter::Sum;
 
 mod edge;
+mod path;
+mod traits;
 
 pub use edge::Edge;
 use edge::WeightedEdge;
+use path::GraphPath;
+pub use traits::graph;
+use traits::Graphable;
 
-pub trait Node: Debug + PartialEq + Eq + Hash + Clone {}
-
-type Nodes<N, E> = HashMap<N, HashMap<N, WeightedEdge<E>>>;
+type Nodes<E> = HashMap<<E as Edge>::Node, HashMap<<E as Edge>::Node, WeightedEdge<E>>>;
 
 #[derive(Debug)]
-pub struct GraphBuilder<N, E>
+pub struct GraphBuilder<'g, E, G>
 where
-    N: Node,
     E: Edge,
+    G: Graphable + ?Sized,
 {
-    nodes: Nodes<N, E>,
+    nodes: Nodes<E>,
+    graphable: &'g G,
 }
 
-impl<N, E> GraphBuilder<N, E>
+impl<'g, N, E, G, W> GraphBuilder<'g, E, G>
 where
-    N: Node,
-    E: Edge,
+    N: Debug + Clone + Hash + Eq + PartialEq,
+    E: Edge<Weight = W, Node = N>,
+    W: Clone + Sum,
+    G: Graphable<Edge = E>,
 {
     pub fn insert(&mut self, edge: (N, E, N)) -> bool {
         // Left to right
@@ -58,30 +65,68 @@ where
         true
     }
 
-    /// Create an empty graph
-    pub fn new() -> Self {
-        Self {
-            nodes: HashMap::new(),
+    /// Explore a map starting at the given point,
+    /// adding appropriate edges to the graph.
+    pub fn explore(&mut self, origin: N) {
+        let mut queue = Vec::new();
+        let mut visited = HashSet::new();
+
+        queue.push(E::new(origin.clone()));
+
+        while let Some(path) = queue.pop() {
+            if (self.graphable.is_node(path.destination()) || path.destination() == &origin)
+                && !path.is_empty()
+            {
+                // We've found a node, stick an edge in both directions.
+                let o = path.origin().clone();
+                let d = path.destination().clone();
+
+                self.insert((o, path.clone(), d));
+
+                if !visited.insert((path.origin().clone(), path.destination().clone())) {
+                    continue;
+                }
+
+                let stub = E::new(path.destination().clone());
+
+                for (n, e) in self.graphable.neighbors(path.destination()) {
+                    queue.push(stub.step(n.clone(), e.clone()))
+                }
+            } else {
+                if !visited.insert((path.origin().clone(), path.destination().clone())) {
+                    continue;
+                }
+                for (n, e) in self.graphable.neighbors(path.destination()) {
+                    queue.push(path.step(n.clone(), e.clone()))
+                }
+            }
         }
     }
 
-    pub fn build(self) -> Graph<N, E> {
+    /// Create an empty graph
+    pub fn new(graphable: &'g G) -> Self {
+        Self {
+            nodes: HashMap::new(),
+            graphable,
+        }
+    }
+
+    pub fn build(self) -> Graph<E> {
         Graph { nodes: self.nodes }
     }
 }
 #[derive(Debug)]
-pub struct Graph<N, E>
+pub struct Graph<E>
 where
-    N: Node,
     E: Edge,
 {
-    nodes: Nodes<N, E>,
+    nodes: Nodes<E>,
 }
 
-impl<N, E> Graph<N, E>
+impl<N, E> Graph<E>
 where
-    N: Node,
-    E: Edge,
+    N: Debug + Clone + Hash + Eq + PartialEq + 'static,
+    E: Edge<Node = N>,
 {
     pub fn contains_node(&self, node: &N) -> bool {
         self.nodes.contains_key(node)
@@ -106,16 +151,16 @@ where
     }
 }
 
-impl<N, E> Graph<N, E>
+impl<N, E> Graph<E>
 where
-    N: Node,
-    E: Edge<Weight = usize>,
+    N: Debug + Clone + Hash + Eq + PartialEq,
+    E: Edge<Weight = usize, Node = N>,
 {
     /// Find a path within the graph.
     ///
     /// Returns None when no path can be found, or when origin or destination
     /// are not nodes in the graph.
-    pub fn find_path(&self, origin: N, destination: N) -> Option<graphsearch::GraphPath<N, E>> {
+    pub fn find_path(&self, origin: N, destination: N) -> Option<GraphPath<N, E>> {
         use crate::dijkstra;
 
         // Chech that start and endpoints are nodes.
@@ -132,81 +177,32 @@ where
 mod graphsearch {
 
     use std::cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd};
+    use std::fmt::Debug;
+    use std::hash::Hash;
+    use std::iter::Sum;
 
+    use super::path::GraphPath;
+    use super::{Edge, Graph};
     use crate::{SearchCacher, SearchCandidate, SearchState};
-
-    use super::{Edge, Graph, Node};
-
-    #[derive(Debug, Clone)]
-    pub struct GraphPath<N, E>
-    where
-        N: Node,
-        E: Edge,
-    {
-        pub(crate) nodes: Vec<N>,
-        pub(crate) edges: Vec<E>,
-    }
-
-    impl<N, E> GraphPath<N, E>
-    where
-        N: Node,
-        E: Edge,
-    {
-        fn new(origin: N) -> Self {
-            Self {
-                nodes: vec![origin],
-                edges: Vec::new(),
-            }
-        }
-
-        fn step(&self, node: N, edge: E) -> Self {
-            let mut nextpath = self.clone();
-            nextpath.nodes.push(node);
-            nextpath.edges.push(edge);
-            nextpath
-        }
-
-        fn destination(&self) -> &N {
-            self.nodes.last().unwrap()
-        }
-
-        fn penultimate(&self) -> Option<&N> {
-            let n = self.nodes.len();
-            if n > 1 {
-                Some(&self.nodes[n - 2])
-            } else {
-                None
-            }
-        }
-    }
-
-    impl<N, E> GraphPath<N, E>
-    where
-        N: Node,
-        E: Edge<Weight = usize>,
-    {
-        fn weight(&self) -> usize {
-            self.edges.iter().map(|e| e.weight()).sum()
-        }
-    }
 
     #[derive(Debug, Clone)]
     pub(crate) struct GraphPathCandidate<'m, N, E>
     where
-        N: Node,
-        E: Edge,
+        N: Debug + Clone,
+        E: Edge<Node = N>,
     {
         pub(crate) path: GraphPath<N, E>,
         destination: &'m N,
-        graph: &'m Graph<N, E>,
+        graph: &'m Graph<E>,
     }
 
-    impl<'m, N, E> GraphPathCandidate<'m, N, E>
+    impl<'m, N, E, W> GraphPathCandidate<'m, N, E>
     where
-        N: Node,
-        E: Edge,
+        N: Debug + Hash + Clone + Eq,
+        E: Edge<Weight = W, Node = N>,
+        W: Sum + Ord + Eq + Debug + Copy,
     {
-        pub(crate) fn start(origin: N, destination: &'m N, graph: &'m Graph<N, E>) -> Self {
+        pub(crate) fn start(origin: N, destination: &'m N, graph: &'m Graph<E>) -> Self {
             Self {
                 path: GraphPath::new(origin),
                 destination: destination,
@@ -215,8 +211,10 @@ mod graphsearch {
         }
 
         fn step(&self, node: N, edge: E) -> Self {
+            let ne = GraphPath::new(self.path.destination().clone())
+                .step_one(node.clone(), edge.clone());
             Self {
-                path: self.path.step(node, edge),
+                path: self.path.step(node, ne),
                 destination: self.destination,
                 graph: self.graph,
             }
@@ -225,8 +223,8 @@ mod graphsearch {
 
     impl<'m, N, E> SearchCandidate for GraphPathCandidate<'m, N, E>
     where
-        N: Node,
-        E: Edge<Weight = usize>,
+        N: Debug + Clone + Hash + Eq + PartialEq,
+        E: Edge<Weight = usize, Node = N>,
     {
         fn is_complete(&self) -> bool {
             self.destination == self.path.destination()
@@ -249,8 +247,8 @@ mod graphsearch {
 
     impl<'m, N, E> SearchState for GraphPathCandidate<'m, N, E>
     where
-        N: Node,
-        E: Edge<Weight = usize>,
+        N: Debug + Clone + Hash + Eq + PartialEq,
+        E: Edge<Weight = usize, Node = N>,
     {
         type State = N;
 
@@ -261,8 +259,8 @@ mod graphsearch {
 
     impl<'m, N, E> SearchCacher for GraphPathCandidate<'m, N, E>
     where
-        N: Node,
-        E: Edge<Weight = usize>,
+        N: Debug + Clone + Hash + Eq + PartialEq,
+        E: Edge<Weight = usize, Node = N>,
     {
         type Value = usize;
 
@@ -273,8 +271,8 @@ mod graphsearch {
 
     impl<'m, N, E> Ord for GraphPathCandidate<'m, N, E>
     where
-        N: Node,
-        E: Edge<Weight = usize>,
+        N: Debug + Clone + Hash + Eq + PartialEq,
+        E: Edge<Weight = usize, Node = N>,
     {
         fn cmp(&self, other: &Self) -> Ordering {
             self.path.weight().cmp(&other.path.weight())
@@ -283,8 +281,8 @@ mod graphsearch {
 
     impl<'m, N, E> PartialOrd for GraphPathCandidate<'m, N, E>
     where
-        N: Node,
-        E: Edge<Weight = usize>,
+        N: Debug + Clone + Hash + Eq + PartialEq,
+        E: Edge<Weight = usize, Node = N>,
     {
         fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
             Some(self.cmp(other))
@@ -293,8 +291,8 @@ mod graphsearch {
 
     impl<'m, N, E> PartialEq for GraphPathCandidate<'m, N, E>
     where
-        N: Node,
-        E: Edge<Weight = usize>,
+        N: Debug + Clone + Hash + Eq + PartialEq,
+        E: Edge<Weight = usize, Node = N>,
     {
         fn eq(&self, other: &Self) -> bool {
             self.path.weight().eq(&other.path.weight())
@@ -303,8 +301,8 @@ mod graphsearch {
 
     impl<'m, N, E> Eq for GraphPathCandidate<'m, N, E>
     where
-        N: Node,
-        E: Edge<Weight = usize>,
+        N: Debug + Clone + Hash + Eq + PartialEq,
+        E: Edge<Weight = usize, Node = N>,
     {
     }
 }

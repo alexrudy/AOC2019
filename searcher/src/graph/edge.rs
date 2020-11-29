@@ -1,11 +1,23 @@
 use std::cmp::{Ord, Ordering, PartialEq, PartialOrd};
 use std::convert::From;
 use std::fmt::Debug;
+use std::hash::Hash;
 
 pub trait Edge: Debug + PartialOrd + Ord + Clone {
-    type Weight: Debug + PartialOrd + Ord + Copy;
+    type Weight: Debug + PartialOrd + Ord + Copy + Clone;
+    type Node: Debug + PartialEq + Eq + Hash + Clone;
 
     fn weight(&self) -> Self::Weight;
+
+    fn new(node: Self::Node) -> Self;
+
+    fn origin(&self) -> &Self::Node;
+
+    fn destination(&self) -> &Self::Node;
+
+    fn step(&self, node: Self::Node, edge: Self) -> Self;
+
+    fn is_empty(&self) -> bool;
 }
 
 #[derive(Debug, Clone)]
