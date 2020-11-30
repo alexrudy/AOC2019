@@ -10,7 +10,7 @@ use std::fmt::Debug;
 use super::map::Map;
 use super::path::Path;
 use super::{Direction, Point};
-use graphedge::GPath;
+pub use graphedge::GPath;
 use searcher::graph;
 
 pub use graphinterest::GraphWithInterest;
@@ -153,9 +153,7 @@ mod graphdecomp {
     {
         let gm = GraphableMap::new(map);
         let mut b = builder(&gm);
-        eprintln!("Set up builder");
         b.explore(origin);
-        eprintln!("Explored {:?}", origin);
         b.build()
     }
 }

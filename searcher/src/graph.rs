@@ -13,7 +13,7 @@ mod traits;
 
 pub use edge::Edge;
 use edge::WeightedEdge;
-use path::GraphPath;
+pub use path::GraphPath;
 pub use traits::Graphable;
 
 type Nodes<E> = HashMap<<E as Edge>::Node, HashMap<<E as Edge>::Node, WeightedEdge<E>>>;

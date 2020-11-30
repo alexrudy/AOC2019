@@ -8,6 +8,7 @@ use geometry::coord2d::graph;
 use geometry::coord2d::map::Map;
 use geometry::coord2d::pathfinder;
 use geometry::coord2d::Point;
+use searcher::graph::{GraphPath, Graphable};
 use searcher::Score;
 use searcher::SearchCandidate;
 use searcher::SearchScore;
@@ -19,17 +20,51 @@ use super::multi::{MultiSpelunkPath, MultiSpelunkState};
 #[derive(Debug, Clone)]
 struct KeyGraphable<'m> {
     map: &'m map::MultiMap,
+    base: &'m graph::RawGraph,
     keys: &'m map::KeyRing,
     location: Point,
 }
 
 impl<'m> KeyGraphable<'m> {
-    fn new(map: &'m map::MultiMap, keys: &'m map::KeyRing, location: Point) -> Self {
+    fn new(
+        map: &'m map::MultiMap,
+        base: &'m graph::RawGraph,
+        keys: &'m map::KeyRing,
+        location: Point,
+    ) -> Self {
         KeyGraphable {
             map,
+            base,
             keys,
             location,
         }
+    }
+}
+
+impl<'m> Graphable for KeyGraphable<'m> {
+    type Edge = GraphPath<Point, graph::GPath>;
+
+    fn is_node(&self, node: &Point) -> bool {
+        if *node == self.location {
+            return true;
+        }
+        match self.map.get(*node) {
+            Some(map::Tile::Key(_)) => true,
+            Some(map::Tile::Entrance) => true,
+            _ => false,
+        }
+    }
+
+    fn neighbors(&self, node: &Point) -> Vec<(Point, GraphPath<Point, graph::GPath>)> {
+        let here = GraphPath::new(*node);
+        self.base
+            .edges(node)
+            .filter(|(&d, _)| self.is_traversable(d))
+            .map(|(d, p)| {
+                let gp: graph::GPath = p.clone().into();
+                (*d, here.step_one(*d, gp))
+            })
+            .collect()
     }
 }
 
@@ -61,6 +96,7 @@ type MultiGraph = graph::RawGraph;
 #[derive(Debug)]
 struct MultiGraphs<'m> {
     map: &'m map::MultiMap,
+    basegraph: graph::RawGraph,
     graphs: RefCell<HashMap<map::KeyRing, Rc<MultiGraph>>>,
 }
 
@@ -76,19 +112,27 @@ impl<'m> MultiGraphs<'m> {
         {
             use geometry::coord2d::graph::Graphable;
 
-            let kg = KeyGraphable::new(self.map, keys, origin);
+            let kg = KeyGraphable::new(self.map, &self.basegraph, keys, origin);
 
             let rg = kg.grapher(self.map.entrances().iter()).raw();
-
-            self.graphs.borrow_mut().insert(keys.clone(), Rc::new(rg));
+            let mut gs = self.graphs.borrow_mut();
+            gs.insert(keys.clone(), Rc::new(rg));
+            if gs.len() % 100 == 0 {
+                eprintln!("G{}", gs.len());
+            }
         }
 
         self.graph(keys, origin)
     }
 
     pub(crate) fn new(map: &'m map::MultiMap) -> Self {
+        use geometry::coord2d::graph::Graphable;
+
+        let g = map.grapher(map.entrances().iter()).raw();
+
         Self {
             map,
+            basegraph: g,
             graphs: RefCell::new(HashMap::new()),
         }
     }

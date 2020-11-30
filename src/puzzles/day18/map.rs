@@ -6,7 +6,7 @@ use geometry::coord2d::pathfinder;
 
 use lazy_static::lazy_static;
 
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::convert::{TryFrom, TryInto};
 use std::str::FromStr;
 use std::string::ToString;
@@ -72,7 +72,7 @@ impl ToString for KeyRing {
 
 #[derive(Debug, Clone, Default)]
 pub(crate) struct Map {
-    tiles: HashMap<Point, Tile>,
+    tiles: BTreeMap<Point, Tile>,
     n_keys: usize,
 }
 
@@ -80,7 +80,7 @@ impl FromStr for Map {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut tiles = HashMap::new();
+        let mut tiles = BTreeMap::new();
 
         for (y, line) in s.lines().enumerate() {
             for (x, c) in line.trim().chars().enumerate() {
@@ -97,7 +97,7 @@ impl FromStr for Map {
 }
 
 impl Map {
-    fn new(tiles: HashMap<Point, Tile>) -> Self {
+    fn new(tiles: BTreeMap<Point, Tile>) -> Self {
         let n_keys = tiles.values().filter(|t| t.is_key()).count();
 
         Map { tiles, n_keys }
