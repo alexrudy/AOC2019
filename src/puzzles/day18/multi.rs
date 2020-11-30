@@ -166,7 +166,7 @@ impl<'m> MultiSpelunker<'m> {
     ) -> Vec<MultiSpelunker<'m>> {
         let mut candidates = Vec::new();
 
-        for (point, path) in graph.edges(*location) {
+        for (point, path) in graph.edges(location) {
             if let Some(c) = self.travel_to(robot, self.map.get(*point), path, point) {
                 candidates.push(c);
             }

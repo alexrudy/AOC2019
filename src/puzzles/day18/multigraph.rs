@@ -78,14 +78,7 @@ impl<'m> MultiGraphs<'m> {
 
             let kg = KeyGraphable::new(self.map, keys, origin);
 
-            let rg = {
-                let mut g = kg.graph(origin);
-                for e in self.map.entrances() {
-                    g.explore(*e);
-                }
-                g
-            }
-            .raw();
+            let rg = kg.grapher(self.map.entrances().iter()).raw();
 
             self.graphs.borrow_mut().insert(keys.clone(), Rc::new(rg));
         }
@@ -140,7 +133,7 @@ impl<'m> MultiGraphSpelunker<'m> {
         let mut candidates = Vec::new();
 
         if graph.contains(location) {
-            for (point, path) in graph.edges(*location) {
+            for (point, path) in graph.edges(location) {
                 if let Some(c) = self.travel_to(robot, self.map.get(*point), path, point) {
                     candidates.push(c);
                 }

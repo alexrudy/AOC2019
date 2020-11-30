@@ -15,6 +15,8 @@ pub trait Edge: Debug + PartialOrd + Ord + Clone {
 
     fn destination(&self) -> &Self::Node;
 
+    fn reverse(&self) -> Self;
+
     fn step(&self, node: Self::Node, edge: Self) -> Self;
 
     fn is_empty(&self) -> bool;
@@ -27,6 +29,16 @@ where
 {
     pub(crate) edge: E,
     weight: E::Weight,
+}
+
+impl<E> WeightedEdge<E>
+where
+    E: Edge,
+{
+    pub fn reverse(&self) -> Self {
+        let edge = self.edge.reverse();
+        edge.into()
+    }
 }
 
 impl<E> From<E> for WeightedEdge<E>

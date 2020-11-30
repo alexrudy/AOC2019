@@ -135,7 +135,7 @@ impl<'m> Spelunker<'m> {
     fn candidates(&self) -> Result<Vec<Spelunker<'m>>, Error> {
         let mut candidates = Vec::with_capacity(4);
 
-        for (point, path) in self.graph.edges(self.location()?) {
+        for (point, path) in self.graph.edges(&self.location()?) {
             match self.map.get(*point) {
                 Some(map::Tile::Key(c)) => {
                     let mut newsp = self.clone();

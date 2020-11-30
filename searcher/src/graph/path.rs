@@ -31,6 +31,10 @@ where
         self.edges.len()
     }
 
+    pub fn edges(&self) -> &[E] {
+        &self.edges
+    }
+
     pub fn step_one(&self, node: N, edge: E) -> Self {
         let mut nextpath = self.clone();
         nextpath.nodes.push(node);
@@ -145,5 +149,12 @@ where
 
     fn is_empty(&self) -> bool {
         self.len() == 0
+    }
+
+    fn reverse(&self) -> Self {
+        let mut rpath = self.clone();
+        rpath.nodes.reverse();
+        rpath.edges.reverse();
+        rpath
     }
 }

@@ -14,8 +14,7 @@ mod traits;
 pub use edge::Edge;
 use edge::WeightedEdge;
 use path::GraphPath;
-pub use traits::graph;
-use traits::Graphable;
+pub use traits::Graphable;
 
 type Nodes<E> = HashMap<<E as Edge>::Node, HashMap<<E as Edge>::Node, WeightedEdge<E>>>;
 
@@ -56,10 +55,10 @@ where
             .entry(edge.0.clone())
             .and_modify(|e| {
                 if *e > wedge {
-                    *e = wedge.clone();
+                    *e = wedge.reverse();
                 }
             })
-            .or_insert_with(|| wedge.clone());
+            .or_insert_with(|| wedge.reverse());
 
         // TODO: This should reflect whether we actually did the insert
         true
@@ -115,6 +114,16 @@ where
         Graph { nodes: self.nodes }
     }
 }
+
+pub fn builder<W, E, G>(g: &G) -> GraphBuilder<E, G>
+where
+    G: Graphable<Edge = E>,
+    E: Edge<Weight = W>,
+    W: Sum + Clone,
+{
+    GraphBuilder::new(g)
+}
+
 #[derive(Debug)]
 pub struct Graph<E>
 where
@@ -162,6 +171,7 @@ where
     /// are not nodes in the graph.
     pub fn find_path(&self, origin: N, destination: N) -> Option<GraphPath<N, E>> {
         use crate::dijkstra;
+        use crate::SearchOptions;
 
         // Chech that start and endpoints are nodes.
         // TODO: Could dynamically add nodes to the graph as new options appear?
@@ -169,8 +179,19 @@ where
             return None;
         }
 
+        let options = {
+            let mut o = SearchOptions::default();
+            o.verbose = Some(1);
+            o.exhaustive = true;
+            o
+        };
+
         let c = graphsearch::GraphPathCandidate::start(origin, &destination, &self);
-        dijkstra::run(c).ok().map(|c| c.path)
+        dijkstra::build(c)
+            .with_options(options)
+            .run()
+            .ok()
+            .map(|c| c.path)
     }
 }
 
@@ -275,7 +296,7 @@ mod graphsearch {
         E: Edge<Weight = usize, Node = N>,
     {
         fn cmp(&self, other: &Self) -> Ordering {
-            self.path.weight().cmp(&other.path.weight())
+            self.path.weight().cmp(&other.path.weight()).reverse()
         }
     }
 

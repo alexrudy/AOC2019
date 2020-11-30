@@ -131,7 +131,7 @@ where
     Q: SearchQueue<Candidate = Score<S>> + Default,
     C: Cache<Candidate = Score<S>>,
 {
-    fn new_with_score(origin: S) -> Self {
+    pub fn new_with_score(origin: S) -> Self {
         Self::new(Score::from(origin))
     }
 }
@@ -142,7 +142,7 @@ where
     Q: SearchQueue<Candidate = S> + Default,
     C: Cache<Candidate = S>,
 {
-    fn new_with_options(origin: S, options: SearchOptions) -> Self {
+    pub fn new_with_options(origin: S, options: SearchOptions) -> Self {
         let counter = StepLimit::new(options.limit);
         let timer = TimeLimit::new(options.maxtime);
 
@@ -158,7 +158,7 @@ where
         sr
     }
 
-    fn new(origin: S) -> Self {
+    pub fn new(origin: S) -> Self {
         Self::new_with_options(origin, SearchOptions::default())
     }
 

@@ -88,6 +88,10 @@ impl Path {
         self.steps.len() - 1
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.steps.len() < 2
+    }
+
     /// What is the last direction in this path?
     pub fn last_direction(&self) -> Option<Direction> {
         let n = self.steps.len();
