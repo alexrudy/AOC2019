@@ -92,6 +92,18 @@ impl Path {
         self.steps.len() < 2
     }
 
+    pub fn follow(&self, other: &Self) -> PathResult<Self> {
+        if self.destination() != other.origin() {
+            return Err(PathError::NotAdjacentSequence(
+                *self.destination(),
+                *other.origin(),
+            ));
+        }
+        let mut steps = self.steps.clone();
+        steps.extend(other.steps.iter().skip(1).copied());
+        Ok(Self { steps })
+    }
+
     /// What is the last direction in this path?
     pub fn last_direction(&self) -> Option<Direction> {
         let n = self.steps.len();

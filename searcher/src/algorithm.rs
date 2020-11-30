@@ -234,6 +234,7 @@ where
                 break;
             }
         }
+
         self.results.pop().ok_or(SearchError::NoResultFound)
     }
 }

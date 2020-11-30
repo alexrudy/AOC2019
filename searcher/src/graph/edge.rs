@@ -58,7 +58,7 @@ where
     E: Edge,
 {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.weight.cmp(&other.weight)
+        self.weight.cmp(&other.weight).reverse()
     }
 }
 

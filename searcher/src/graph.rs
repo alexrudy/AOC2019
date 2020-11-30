@@ -1,7 +1,7 @@
 //! Graph decomposition and datastructures.
 
-use std::cmp::PartialEq;
-use std::collections::{HashMap, HashSet};
+use std::cmp::{Ord, PartialEq};
+use std::collections::{BinaryHeap, HashMap, HashSet};
 use std::convert::Into;
 use std::fmt::Debug;
 use std::hash::Hash;
@@ -32,7 +32,7 @@ impl<'g, N, E, G, W> GraphBuilder<'g, E, G>
 where
     N: Debug + Clone + Hash + Eq + PartialEq,
     E: Edge<Weight = W, Node = N>,
-    W: Clone + Sum,
+    W: Clone + Ord + Sum,
     G: Graphable<Edge = E>,
 {
     pub fn insert(&mut self, edge: (N, E, N)) -> bool {
@@ -43,7 +43,7 @@ where
         connections
             .entry(edge.2.clone())
             .and_modify(|e| {
-                if *e > wedge {
+                if *e < wedge {
                     *e = wedge.clone();
                 }
             })
@@ -54,7 +54,7 @@ where
         connections
             .entry(edge.0.clone())
             .and_modify(|e| {
-                if *e > wedge {
+                if *e < wedge {
                     *e = wedge.reverse();
                 }
             })
@@ -67,12 +67,12 @@ where
     /// Explore a map starting at the given point,
     /// adding appropriate edges to the graph.
     pub fn explore(&mut self, origin: N) {
-        let mut queue = Vec::new();
-        let mut visited = HashSet::new();
+        let mut queue: BinaryHeap<WeightedEdge<E>> = BinaryHeap::new();
+        let mut visited = HashMap::new();
 
-        queue.push(E::new(origin.clone()));
+        queue.push(E::new(origin.clone()).into());
 
-        while let Some(path) = queue.pop() {
+        while let Some(WeightedEdge { edge: path, .. }) = queue.pop() {
             if (self.graphable.is_node(path.destination()) || path.destination() == &origin)
                 && !path.is_empty()
             {
@@ -82,21 +82,30 @@ where
 
                 self.insert((o, path.clone(), d));
 
-                if !visited.insert((path.origin().clone(), path.destination().clone())) {
-                    continue;
+                let key = (path.origin().clone(), path.destination().clone());
+                if let Some(w) = visited.get(&key) {
+                    if w <= &path.weight() {
+                        continue;
+                    }
                 }
+                visited.insert(key, path.weight());
 
                 let stub = E::new(path.destination().clone());
 
                 for (n, e) in self.graphable.neighbors(path.destination()) {
-                    queue.push(stub.step(n.clone(), e.clone()))
+                    queue.push(stub.step(n.clone(), e.clone()).into())
                 }
             } else {
-                if !visited.insert((path.origin().clone(), path.destination().clone())) {
-                    continue;
+                let key = (path.origin().clone(), path.destination().clone());
+                if let Some(w) = visited.get(&key) {
+                    if w <= &path.weight() {
+                        continue;
+                    }
                 }
+                visited.insert(key, path.weight());
+
                 for (n, e) in self.graphable.neighbors(path.destination()) {
-                    queue.push(path.step(n.clone(), e.clone()))
+                    queue.push(path.step(n.clone(), e.clone()).into())
                 }
             }
         }
@@ -119,7 +128,7 @@ pub fn builder<W, E, G>(g: &G) -> GraphBuilder<E, G>
 where
     G: Graphable<Edge = E>,
     E: Edge<Weight = W>,
-    W: Sum + Clone,
+    W: Ord + Sum + Clone,
 {
     GraphBuilder::new(g)
 }

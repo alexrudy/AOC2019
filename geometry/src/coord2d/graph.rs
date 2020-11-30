@@ -87,7 +87,7 @@ mod graphedge {
 
         #[allow(unused_variables)]
         fn step(&self, node: Self::Node, edge: Self) -> Self {
-            self.path.step(edge.path.last_direction().unwrap()).into()
+            self.path.follow(&edge.path).unwrap().into()
         }
     }
 }
