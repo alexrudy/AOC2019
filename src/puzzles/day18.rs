@@ -36,12 +36,14 @@ mod multi;
 mod multigraph;
 mod single;
 
-pub(crate) fn main(mut input: Box<dyn Read + 'static>) -> ::std::result::Result<(), Error> {
-    let map: map::Map = {
-        let mut buf = String::new();
-        input.read_to_string(&mut buf)?;
-        buf.parse()?
-    };
+fn read_map(mut input: Box<dyn Read + 'static>) -> ::std::result::Result<map::Map, Error> {
+    let mut buf = String::new();
+    input.read_to_string(&mut buf)?;
+    buf.parse()
+}
+
+pub(crate) fn main(input: Box<dyn Read + 'static>) -> ::std::result::Result<(), Error> {
+    let map = read_map(input)?;
 
     {
         let start = time::Instant::now();
@@ -68,6 +70,7 @@ pub(crate) fn main(mut input: Box<dyn Read + 'static>) -> ::std::result::Result<
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::get_default_input;
 
     #[test]
     fn examples_part1_a() {
@@ -174,6 +177,13 @@ mod test {
     }
 
     #[test]
+    fn answer_part_1() {
+        let input = get_default_input(18).unwrap();
+        let map = read_map(input).unwrap();
+        assert_eq!(single::search(&map).unwrap().distance(), 5102);
+    }
+
+    #[test]
     fn examples_part2_a() {
         let mmap: map::MultiMap = "
         #######
@@ -277,5 +287,25 @@ mod test {
             let mp = multigraph::search(&mmap).unwrap();
             assert_eq!(mp.distance(), 72);
         }
+    }
+
+    #[test]
+    fn answer_part_2() {
+        let input = get_default_input(18).unwrap();
+        let map = read_map(input).unwrap();
+        let mm = map::MultiMap::new(map.clone());
+
+        let sp = multi::search(&mm).unwrap();
+        assert_eq!(sp.distance(), 2282);
+    }
+
+    #[test]
+    fn answer_part_2_graph() {
+        let input = get_default_input(18).unwrap();
+        let map = read_map(input).unwrap();
+        let mm = map::MultiMap::new(map.clone());
+
+        let sp = multigraph::search(&mm).unwrap();
+        assert_eq!(sp.distance(), 2282);
     }
 }

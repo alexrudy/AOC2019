@@ -1,7 +1,7 @@
 //! Graph decomposition and datastructures.
 
 use std::cmp::{Ord, PartialEq};
-use std::collections::{BinaryHeap, HashMap, HashSet};
+use std::collections::{BinaryHeap, HashMap};
 use std::convert::Into;
 use std::fmt::Debug;
 use std::hash::Hash;
