@@ -227,11 +227,23 @@ where
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut pc = 0;
+        let mut lines = 1;
 
         while pc < self.program.len() {
-            let instruction = self.program.instruction(pc).unwrap();
-            writeln!(f, "{}", instruction)?;
-            pc += instruction.n_arguments() as IntMem;
+            if let Ok(instruction) = self.program.instruction(pc) {
+                writeln!(f, "[{:04}|{:04}] {}", lines, pc, instruction)?;
+                pc += instruction.n_arguments() as IntMem;
+            } else {
+                writeln!(
+                    f,
+                    "[{:04}|{:04}] {}",
+                    lines,
+                    pc,
+                    self.program.argument(pc).expect("Opcode")
+                )?;
+                pc += 1;
+            }
+            lines += 1;
         }
         Ok(())
     }
