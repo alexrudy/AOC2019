@@ -8,9 +8,6 @@ default-run = "aoc2019"
 [[bin]]
 name = "aoc2019"
 
-[[bin]]
-name = "d18"
-
 [dependencies]
 clap = "2.33"
 lazy_static = "*"

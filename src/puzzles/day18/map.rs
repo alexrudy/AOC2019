@@ -142,6 +142,7 @@ impl Map {
             .collect()
     }
 
+    #[allow(dead_code)]
     pub(crate) fn key_lookup(&self) -> HashMap<char, Point> {
         self.keys().iter().map(|k| (k.door, k.location)).collect()
     }
@@ -269,6 +270,7 @@ impl MultiMap {
         &self.2
     }
 
+    #[allow(dead_code)]
     pub(crate) fn quadrant(&self, location: Point) -> usize {
         let Point { x, y } = self.0.entrance().unwrap().offset(location);
 
@@ -280,6 +282,7 @@ impl MultiMap {
         }
     }
 
+    #[allow(dead_code)]
     pub(crate) fn key_lookup(&self) -> HashMap<char, Point> {
         self.0.key_lookup()
     }

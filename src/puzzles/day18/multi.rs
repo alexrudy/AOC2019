@@ -13,6 +13,7 @@ use super::KeyPath;
 pub(crate) struct MultiSpelunkState(map::KeyRing, [Point; 4]);
 
 impl MultiSpelunkState {
+    #[allow(dead_code)]
     pub(crate) fn new(keys: map::KeyRing, robots: [Point; 4]) -> Self {
         MultiSpelunkState(keys, robots)
     }
@@ -52,6 +53,7 @@ impl MultiSpelunkPath {
         }
     }
 
+    #[allow(dead_code)]
     pub(crate) fn keys_by_quadrant(&self, map: &map::MultiMap) -> [Vec<char>; 4] {
         let mut results = [Vec::new(), Vec::new(), Vec::new(), Vec::new()];
         let lookup = map.key_lookup();
@@ -109,6 +111,7 @@ impl MultiSpelunkPath {
         self.distance
     }
 
+    #[allow(dead_code)]
     pub(crate) fn keyring(&self) -> &map::KeyRing {
         &self.keys
     }
