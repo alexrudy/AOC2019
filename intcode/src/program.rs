@@ -184,6 +184,20 @@ impl Memory {
     }
 }
 
+impl Arguments for Memory {
+    fn argument(&self, address: IntMem) -> Result<IntMem> {
+        self.registers.argument(address)
+    }
+
+    fn tape(&self) -> Vec<IntMem> {
+        self.registers.tape()
+    }
+
+    fn len(&self) -> IntMem {
+        self.registers.len() as IntMem
+    }
+}
+
 #[derive(Debug)]
 pub struct Instruction {
     opcode: OpCode,

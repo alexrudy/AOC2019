@@ -3,8 +3,9 @@
 #![allow(dead_code)]
 
 use std::cmp;
+use std::default::Default;
 use std::fmt;
-use std::ops::RangeInclusive;
+use std::ops::{self, RangeInclusive};
 use std::str::FromStr;
 
 use itertools::iproduct;
@@ -183,6 +184,23 @@ impl Point {
     }
 }
 
+impl Default for Point {
+    fn default() -> Self {
+        Self::origin()
+    }
+}
+
+impl ops::Add for Point {
+    type Output = Point;
+
+    fn add(self, other: Point) -> Self::Output {
+        Self {
+            x: self.x + other.x,
+            y: self.y + other.y,
+        }
+    }
+}
+
 impl cmp::Ord for Point {
     fn cmp(&self, other: &Self) -> cmp::Ordering {
         self.y.cmp(&other.y).then(self.x.cmp(&other.x))
@@ -252,25 +270,32 @@ impl FromStr for Point {
     }
 }
 
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum Side {
+    Left,
+    Top,
+    Right,
+    Bottom,
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum Corner {
+    TopLeft,
+    TopRight,
+    BottomLeft,
+    BottomRight,
+}
+
 /// Describes the side of a bounding box
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum Edge {
-    Left,
-    TopLeft,
-    Top,
-    TopRight,
-    Right,
-    BottomRight,
-    Bottom,
-    BottomLeft,
+    Side(Side),
+    Corner(Corner),
 }
 
 impl Edge {
     pub fn is_corner(&self) -> bool {
-        match self {
-            Edge::TopLeft | Edge::TopRight | Edge::BottomLeft | Edge::BottomRight => true,
-            _ => false,
-        }
+        matches!(self, Edge::Corner(_))
     }
 }
 
@@ -326,19 +351,25 @@ impl BoundingBox {
     }
 
     /// Modify this boundign box to include a given point.
-    pub fn include(&mut self, point: Point) {
+    pub fn include(&mut self, point: Point) -> bool {
+        let mut updated = false;
         if point.x < self.left {
             self.left = point.x;
+            updated = true;
         }
         if point.x > self.right {
             self.right = point.x;
+            updated = true;
         }
         if point.y < self.top {
             self.top = point.y;
+            updated = true;
         }
         if point.y > self.bottom {
             self.bottom = point.y;
+            updated = true;
         }
+        updated
     }
 
     /// Construct a bounding box from an iterator of points.
@@ -482,15 +513,35 @@ impl BoundingBox {
     /// satisfies multiple edges. (left - top - right - bottom)
     pub fn edge(&self, point: Point) -> Option<Edge> {
         match (point.x, point.y) {
-            (x, y) if self.left == x && self.top == y => Some(Edge::TopLeft),
-            (x, y) if self.left == x && self.bottom == y => Some(Edge::BottomLeft),
-            (x, y) if self.right == x && self.top == y => Some(Edge::TopRight),
-            (x, y) if self.right == x && self.bottom == y => Some(Edge::BottomRight),
-            (x, _) if self.left == x => Some(Edge::Left),
-            (_, y) if self.top == y => Some(Edge::Top),
-            (x, _) if self.right == x => Some(Edge::Right),
-            (_, y) if self.bottom == y => Some(Edge::Bottom),
+            (x, y) if self.left == x && self.top == y => Some(Edge::Corner(Corner::TopLeft)),
+            (x, y) if self.left == x && self.bottom == y => Some(Edge::Corner(Corner::BottomLeft)),
+            (x, y) if self.right == x && self.top == y => Some(Edge::Corner(Corner::TopRight)),
+            (x, y) if self.right == x && self.bottom == y => {
+                Some(Edge::Corner(Corner::BottomRight))
+            }
+            (x, _) if self.left == x => Some(Edge::Side(Side::Left)),
+            (_, y) if self.top == y => Some(Edge::Side(Side::Top)),
+            (x, _) if self.right == x => Some(Edge::Side(Side::Right)),
+            (_, y) if self.bottom == y => Some(Edge::Side(Side::Bottom)),
             _ => None,
+        }
+    }
+
+    pub fn corners(&self) -> [Point; 4] {
+        [
+            (self.left, self.top).into(),
+            (self.right, self.top).into(),
+            (self.right, self.bottom).into(),
+            (self.left, self.bottom).into(),
+        ]
+    }
+
+    pub fn corner(&self, corner: Corner) -> Point {
+        match corner {
+            Corner::TopLeft => (self.left, self.top).into(),
+            Corner::TopRight => (self.right, self.top).into(),
+            Corner::BottomLeft => (self.left, self.bottom).into(),
+            Corner::BottomRight => (self.bottom, self.right).into(),
         }
     }
 
@@ -521,6 +572,24 @@ impl BoundingBox {
             writeln!(f, "")?;
         }
         Ok(())
+    }
+}
+
+impl Default for BoundingBox {
+    fn default() -> Self {
+        Self::empty()
+    }
+}
+
+impl From<BoundingBox> for (Position, Position, Position, Position) {
+    fn from(bbox: BoundingBox) -> Self {
+        (bbox.left, bbox.right, bbox.top, bbox.bottom)
+    }
+}
+
+impl From<(Position, Position, Position, Position)> for BoundingBox {
+    fn from(bbox: (Position, Position, Position, Position)) -> Self {
+        BoundingBox::new(bbox.0, bbox.1, bbox.2, bbox.3)
     }
 }
 

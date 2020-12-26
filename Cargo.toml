@@ -22,6 +22,7 @@ paste = "*"
 regex = "1"
 num = "*"
 ansi_term = "*"
+itertools = "*"
 
 [workspace]
 members = [

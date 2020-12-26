@@ -29,10 +29,13 @@ impl Computer {
     }
 
     pub fn run(&mut self) -> Result<CPUState> {
-        while let CPUState::Continue = self.op()? {}
+        loop {
+            let state = self.op()?;
 
-        // Return the last opcode result
-        self.op()
+            if state != CPUState::Continue {
+                return Ok(state);
+            }
+        }
     }
 
     pub fn program(self) -> Program {

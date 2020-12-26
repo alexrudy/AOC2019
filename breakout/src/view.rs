@@ -8,7 +8,7 @@ use cursive::Printer;
 use cursive::Vec2;
 use cursive::XY;
 
-use geometry::coord2d::Edge;
+use geometry::coord2d::{Corner, Edge, Side};
 
 use crate::{Screen, Tile};
 
@@ -35,14 +35,14 @@ impl View for ScreenView {
                     Tile::Block => "█",
                     Tile::Ball => "●",
                     Tile::Wall => match board_bbox.edge((x, y).into()) {
-                        Some(Edge::TopLeft) => "┏",
-                        Some(Edge::TopRight) => "┓",
-                        Some(Edge::BottomLeft) => "┗",
-                        Some(Edge::BottomRight) => "┛",
-                        Some(Edge::Left) => "┃",
-                        Some(Edge::Right) => "┃",
-                        Some(Edge::Top) => "━",
-                        Some(Edge::Bottom) => "━",
+                        Some(Edge::Corner(Corner::TopLeft)) => "┏",
+                        Some(Edge::Corner(Corner::TopRight)) => "┓",
+                        Some(Edge::Corner(Corner::BottomLeft)) => "┗",
+                        Some(Edge::Corner(Corner::BottomRight)) => "┛",
+                        Some(Edge::Side(Side::Left)) => "┃",
+                        Some(Edge::Side(Side::Right)) => "┃",
+                        Some(Edge::Side(Side::Top)) => "━",
+                        Some(Edge::Side(Side::Bottom)) => "━",
                         None => "+",
                     },
                     Tile::Paddle => "─",

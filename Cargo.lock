@@ -52,6 +52,7 @@ dependencies = [
  "clap",
  "geometry",
  "intcode",
+ "itertools",
  "lazy_static",
  "num",
  "paste",
