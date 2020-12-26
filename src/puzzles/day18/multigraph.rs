@@ -123,57 +123,15 @@ impl<'m> MultiGraphSpelunker<'m> {
         location: &Point,
         graph: &graph::RawGraph,
     ) -> Vec<MultiGraphSpelunker<'m>> {
-        let mut candidates: HashMap<char, MultiGraphSpelunker<'m>> = HashMap::new();
-        let mut queue = BinaryHeap::new();
-        let mut seen = HashMap::new();
+        let mut candidates = Vec::new();
 
-        seen.insert(location, 0);
-        queue.push(MGQ(0, *location, pathfinder::Path::new(*location)));
-
-        while let Some(MGQ(_, origin, current_path)) = queue.pop() {
-            if graph.contains(&origin) {
-                for (destination, path) in graph.edges(&origin) {
-                    let tile = self.map.get(*destination);
-
-                    match tile {
-                        Some(map::Tile::Key(ref key)) if !self.path.keyring().contains(key) => {
-                            if let Some(c) = self.travel_to(
-                                robot,
-                                tile,
-                                &current_path.follow(path).unwrap(),
-                                path.destination(),
-                            ) {
-                                if let Some(cand) = candidates.get_mut(key) {
-                                    if cand.distance() > c.distance() {
-                                        seen.insert(destination, c.distance());
-                                        *cand = c;
-                                    }
-                                } else {
-                                    seen.insert(destination, c.distance());
-                                    candidates.insert(*key, c);
-                                }
-                            }
-                        }
-                        Some(map::Tile::Door(ref key)) if !self.path.keyring().contains(key) => {}
-                        Some(_) => {
-                            let new_path = current_path.follow(path).unwrap();
-                            if seen.get(destination).unwrap_or(&usize::MAX) >= &new_path.distance()
-                            {
-                                seen.insert(destination, new_path.distance());
-                                queue.push(MGQ(new_path.distance(), *destination, new_path));
-                            }
-                        }
-                        None => {
-                            unreachable!()
-                        }
-                    }
-                }
-            } else {
-                unreachable!();
+        for (point, path) in graph.edges(location) {
+            if let Some(c) = self.travel_to(robot, self.map.get(*point), path, point) {
+                candidates.push(c);
             }
         }
 
-        candidates.into_iter().map(|(_, m)| m).collect()
+        candidates
     }
 
     fn candidates(&self) -> Vec<MultiGraphSpelunker<'m>> {
