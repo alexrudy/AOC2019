@@ -1,17 +1,19 @@
 //! Provides the building blocks for search algorithms
 
-use std::cmp::{Ord, Ordering, PartialOrd};
 use std::collections::BinaryHeap;
 use std::default::Default;
+use std::time;
 
 use self::cache::Cache;
+use self::score::Score;
 use crate::errors::{Result, SearchError};
-use crate::traits::SearchCandidate;
+use crate::traits::{SearchCandidate, SearchScore};
 
 pub mod astar;
 pub mod basic;
 pub mod cache;
 pub mod dijkstra;
+pub mod score;
 
 /// Trait used to implement queues of search candidates
 /// which should be checked for completion.
@@ -30,63 +32,46 @@ pub trait SearchQueue {
     }
 }
 
-#[derive(Debug)]
-struct Score<S>
-where
-    S: SearchCandidate,
-{
-    candidate: S,
+#[derive(Debug, Default)]
+struct TimeLimit {
+    start: Option<time::Instant>,
+    maximum: Option<time::Duration>,
 }
 
-impl<S> Score<S>
-where
-    S: SearchCandidate,
-{
-    fn new(candidate: S) -> Self {
-        Self { candidate }
+impl TimeLimit {
+    fn new(limit: Option<time::Duration>) -> Self {
+        Self {
+            start: None,
+            maximum: limit,
+        }
+    }
+
+    fn increment(&mut self) -> Result<()> {
+        if self.start.is_none() {
+            self.start = Some(time::Instant::now());
+        }
+        if self
+            .start
+            .map(|s| self.maximum.map(|m| s.elapsed() > m).unwrap_or(false))
+            .unwrap_or(false)
+        {
+            Err(SearchError::TimeLimitExhausted(
+                self.start.unwrap().elapsed(),
+            ))
+        } else {
+            Ok(())
+        }
     }
 }
 
-impl<S> PartialEq for Score<S>
-where
-    S: SearchCandidate,
-{
-    fn eq(&self, other: &Self) -> bool {
-        self.candidate.score().eq(&other.candidate.score())
-    }
-}
-
-impl<S> Eq for Score<S> where S: SearchCandidate {}
-
-impl<S> Ord for Score<S>
-where
-    S: SearchCandidate,
-{
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.candidate
-            .score()
-            .cmp(&other.candidate.score())
-            .reverse()
-    }
-}
-
-impl<S> PartialOrd for Score<S>
-where
-    S: SearchCandidate,
-{
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-#[derive(Debug)]
+#[derive(Debug, Default)]
 struct StepLimit {
     current: usize,
-    maximum: usize,
+    maximum: Option<usize>,
 }
 
 impl StepLimit {
-    fn new(limit: usize) -> Self {
+    fn new(limit: Option<usize>) -> Self {
         Self {
             current: 0,
             maximum: limit,
@@ -96,7 +81,7 @@ impl StepLimit {
     fn increment(&mut self) -> Result<()> {
         self.current += 1;
 
-        if self.current >= self.maximum {
+        if self.maximum.map(|v| self.current >= v).unwrap_or(false) {
             Err(SearchError::StepLimitExhausted(self.current))
         } else {
             Ok(())
@@ -109,7 +94,9 @@ impl StepLimit {
 #[non_exhaustive]
 pub struct SearchOptions {
     pub limit: Option<usize>,
+    pub maxtime: Option<time::Duration>,
     pub verbose: Option<usize>,
+    pub exhaustive: bool,
 }
 
 impl SearchOptions {
@@ -125,39 +112,53 @@ impl SearchOptions {
 #[derive(Debug, Default)]
 pub struct SearchAlgorithm<S, Q, C>
 where
-    S: SearchCandidate,
+    S: SearchCandidate + Ord,
     Q: SearchQueue<Candidate = S> + Default,
     C: Cache<Candidate = S>,
 {
     cache: C,
     queue: Q,
-    results: BinaryHeap<Score<S>>,
-    counter: Option<StepLimit>,
+    results: BinaryHeap<S>,
+    counter: StepLimit,
+    timer: TimeLimit,
     options: SearchOptions,
     origin: Option<S>,
 }
 
+impl<S, Q, C> SearchAlgorithm<Score<S>, Q, C>
+where
+    S: SearchScore,
+    Q: SearchQueue<Candidate = Score<S>> + Default,
+    C: Cache<Candidate = Score<S>>,
+{
+    pub fn new_with_score(origin: S) -> Self {
+        Self::new(Score::from(origin))
+    }
+}
+
 impl<S, Q, C> SearchAlgorithm<S, Q, C>
 where
-    S: SearchCandidate,
+    S: SearchCandidate + Ord,
     Q: SearchQueue<Candidate = S> + Default,
     C: Cache<Candidate = S>,
 {
-    fn new_with_options(origin: S, options: SearchOptions) -> Self {
-        let counter = options.limit.map(|l| StepLimit::new(l));
+    pub fn new_with_options(origin: S, options: SearchOptions) -> Self {
+        let counter = StepLimit::new(options.limit);
+        let timer = TimeLimit::new(options.maxtime);
 
-        let mut sr = SearchAlgorithm {
+        let sr = SearchAlgorithm {
             cache: C::default(),
             queue: Q::default(),
             results: BinaryHeap::default(),
             counter: counter,
+            timer: timer,
             options: options,
             origin: Some(origin),
         };
         sr
     }
 
-    fn new(origin: S) -> Self {
+    pub fn new(origin: S) -> Self {
         Self::new_with_options(origin, SearchOptions::default())
     }
 
@@ -171,28 +172,25 @@ where
     }
 
     fn best(&self) -> Option<&S> {
-        self.results.peek().map(|s| &s.candidate)
+        self.results.peek()
     }
 
     // Should we continue searching from this candidate?
     fn process_candidate(&mut self, candidate: S) -> Result<Option<S>> {
         // Increment the step counter
-        self.counter
-            .as_mut()
-            .map(|c| c.increment())
-            .unwrap_or(Ok(()))?;
+        self.counter.increment()?;
+        self.timer.increment()?;
 
         // If we found an answer, we can stop hunting now
         // and add the answer to our search results.
         if candidate.is_complete() {
-            self.results.push(Score::new(candidate));
+            self.results.push(candidate);
             return Ok(None);
         }
 
         // Scores can only increase in searches, if the best candidate
         // is better than our current guess, give up now.
-        let score = candidate.score();
-        if score >= self.best().map(|s| s.score()).unwrap_or(usize::MAX) {
+        if self.best().map(|s| &candidate >= s).unwrap_or(false) {
             return Ok(None);
         }
 
@@ -202,7 +200,7 @@ where
         Ok(None)
     }
 
-    pub fn show_debug_msg(&self, n: usize) -> bool {
+    fn show_debug_msg(&self, n: usize) -> bool {
         self.options.verbose.map(|v| n % v == 0).unwrap_or(false)
     }
 
@@ -218,17 +216,8 @@ where
         while let Some(candidate) = self.queue.pop() {
             n += 1;
 
-            let score = candidate.score();
-
             if self.show_debug_msg(n) {
-                eprintln!(
-                    "Q{} R{} S{:?} ({}) {}",
-                    self.queue.len(),
-                    self.results.len(),
-                    self.best().map(|p| p.score()),
-                    score,
-                    n
-                );
+                eprintln!("Q{} R{} {}", self.queue.len(), self.results.len(), n);
             }
 
             for child in candidate.children() {
@@ -236,17 +225,16 @@ where
                     self.queue.push(c);
                 }
             }
-            if self
-                .best()
-                .map(|c| self.queue.can_terminate(c))
-                .unwrap_or(false)
+            if !self.options.exhaustive
+                && self
+                    .best()
+                    .map(|c| self.queue.can_terminate(c))
+                    .unwrap_or(false)
             {
                 break;
             }
         }
-        self.results
-            .pop()
-            .map(|s| s.candidate)
-            .ok_or(SearchError::NoResultFound)
+
+        self.results.pop().ok_or(SearchError::NoResultFound)
     }
 }

@@ -43,7 +43,7 @@ pub mod bfs {
 
     fn build<S>(origin: S) -> BreadthFirstSearcher<S>
     where
-        S: SearchCandidate,
+        S: SearchCandidate + Ord,
     {
         SearchAlgorithm::new(origin)
     }
@@ -52,7 +52,7 @@ pub mod bfs {
     /// by the candidates returned by the [SearchCandidate::children] method.
     pub fn run<S>(origin: S) -> Result<S>
     where
-        S: SearchCandidate,
+        S: SearchCandidate + Ord,
     {
         build(origin).run()
     }
@@ -100,7 +100,7 @@ pub mod dfs {
     pub type DepthFirstSearcher<S> = SearchAlgorithm<S, DepthQueue<S>, NoCache<S>>;
     pub fn build<S>(origin: S) -> DepthFirstSearcher<S>
     where
-        S: SearchCandidate,
+        S: SearchCandidate + Ord,
     {
         SearchAlgorithm::new(origin)
     }
@@ -109,7 +109,7 @@ pub mod dfs {
     /// by the candidates returned by the [SearchCandidate::children] method.
     pub fn run<S>(origin: S) -> Result<S>
     where
-        S: SearchCandidate,
+        S: SearchCandidate + Ord,
     {
         build(origin).run()
     }

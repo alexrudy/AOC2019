@@ -13,14 +13,18 @@ pub trait SearchCandidate: Debug + Sized {
     /// considering children of this candidate.
     fn is_complete(&self) -> bool;
 
-    /// Determines how to rank otherwise identical candidates.
-    /// In the search result, the candidate with the highest
-    /// score will be returned.
-    fn score(&self) -> usize;
-
     /// Produces additional candidates to examine in this
     /// search. Candidates need not be complete.
     fn children(&self) -> Vec<Self>;
+}
+
+pub trait SearchScore: SearchCandidate {
+    type Score: Debug + Clone + PartialOrd + Ord;
+
+    /// Determines how to rank otherwise identical candidates.
+    /// In the search result, the candidate with the highest
+    /// score will be returned.
+    fn score(&self) -> Self::Score;
 }
 
 /// An interface for searching when a heuristic can be provided.
@@ -29,10 +33,15 @@ pub trait SearchCandidate: Debug + Sized {
 /// guess at the minimum score achievable given the current
 /// position in the search.
 pub trait SearchHeuristic: SearchCandidate {
+    type Hueristic: Debug + PartialOrd + Ord;
+
     /// Best guess of the final score given our current score.
-    fn heuristic(&self) -> usize {
-        self.score()
-    }
+    fn heuristic(&self) -> Self::Hueristic;
+}
+
+pub trait SearchState: SearchCandidate + Clone {
+    type State: Debug + Eq + Hash;
+    fn state(&self) -> Self::State;
 }
 
 /// An interface for search objects which can be cached.
@@ -43,8 +52,8 @@ pub trait SearchHeuristic: SearchCandidate {
 /// given state. When checking a new candidate, if it produces
 /// an existing state but with a higher or equal score to the
 /// state already observed, the new candidate will be skipped.
-pub trait SearchCacher: SearchCandidate {
-    type State: Debug + Eq + Hash;
+pub trait SearchCacher: SearchState {
+    type Value: Debug + Ord + Clone;
 
-    fn state(&self) -> Self::State;
+    fn value(&self) -> Self::Value;
 }

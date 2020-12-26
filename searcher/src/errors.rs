@@ -1,3 +1,4 @@
+use std::time;
 use thiserror::Error;
 
 /// Error produced when a search fails.
@@ -8,6 +9,9 @@ pub enum SearchError {
 
     #[error("Step limit exhausted after {0} steps")]
     StepLimitExhausted(usize),
+
+    #[error("Time limit exhausted after {0:?}")]
+    TimeLimitExhausted(time::Duration),
 }
 
 /// Result when a search method might fail.

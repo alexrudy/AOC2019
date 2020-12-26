@@ -7,15 +7,16 @@ use std::fmt::Debug;
 
 use super::cache::BasicCache;
 use super::SearchAlgorithm;
-use crate::algorithm::SearchQueue;
 use crate::errors::Result;
 use crate::traits::{SearchCacher, SearchHeuristic};
+use crate::{algorithm::SearchQueue, SearchCandidate};
 
 #[derive(Debug)]
 struct Heuristic<S>
 where
     S: SearchHeuristic,
 {
+    heuristic: S::Hueristic,
     candidate: S,
 }
 
@@ -24,7 +25,7 @@ where
     S: SearchHeuristic,
 {
     fn eq(&self, other: &Self) -> bool {
-        self.candidate.heuristic().eq(&other.candidate.heuristic())
+        self.heuristic.eq(&other.heuristic)
     }
 }
 
@@ -35,10 +36,7 @@ where
     S: SearchHeuristic,
 {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.candidate
-            .heuristic()
-            .cmp(&other.candidate.heuristic())
-            .reverse()
+        self.heuristic.cmp(&other.heuristic).reverse()
     }
 }
 
@@ -84,7 +82,10 @@ where
     }
 
     fn push(&mut self, item: Self::Candidate) {
-        self.queue.push(Heuristic { candidate: item });
+        self.queue.push(Heuristic {
+            heuristic: item.heuristic(),
+            candidate: item,
+        });
     }
 
     fn len(&self) -> usize {
@@ -96,7 +97,7 @@ type AStarSearcher<S> = SearchAlgorithm<S, AStarQueue<S>, BasicCache<S>>;
 
 pub fn build<S>(origin: S) -> AStarSearcher<S>
 where
-    S: SearchHeuristic + SearchCacher,
+    S: SearchHeuristic + SearchCandidate + SearchCacher + Ord,
 {
     SearchAlgorithm::new(origin)
 }
@@ -107,7 +108,7 @@ where
 /// estimated score, as provided by the heuristic.
 pub fn run<S>(origin: S) -> Result<S>
 where
-    S: SearchHeuristic + SearchCacher,
+    S: SearchHeuristic + SearchCandidate + SearchCacher + Ord,
 {
     build(origin).run()
 }

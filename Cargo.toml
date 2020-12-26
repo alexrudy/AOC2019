@@ -3,8 +3,10 @@ name = "aoc2019"
 version = "0.1.0"
 authors = ["Alex Rudy <alex.rudy@bit.ly>"]
 edition = "2018"
+default-run = "aoc2019"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[[bin]]
+name = "aoc2019"
 
 [dependencies]
 clap = "2.33"
@@ -19,6 +21,7 @@ permutohedron = "0.2.4"
 paste = "*"
 regex = "1"
 num = "*"
+ansi_term = "*"
 
 [workspace]
 members = [

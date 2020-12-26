@@ -42,7 +42,7 @@ pub struct BasicCache<S>
 where
     S: SearchCacher,
 {
-    cache: HashMap<S::State, usize>,
+    cache: HashMap<S::State, S::Value>,
 }
 
 impl<S> Default for BasicCache<S>
@@ -58,13 +58,12 @@ where
 
 impl<S> Cache for BasicCache<S>
 where
-    S: SearchCacher,
+    S: SearchCacher + Ord + PartialOrd,
 {
     type Candidate = S;
 
     fn check(&mut self, candidate: &Self::Candidate) -> Result<bool> {
         let state = candidate.state();
-        let score = candidate.score();
         // Check if we have already seen this state in our cache.
         // (a) For states which are not in the cache, add them.
         // (b) If the state is already in the cache, and has a lower score,
@@ -72,17 +71,20 @@ where
         // (c) For states which are already in the cache but have a higher
         //     score, mark this state as the new winner.
 
+        let mut r = true;
+        let value = candidate.value();
         // (a)
-        let cached_score = self.cache.entry(state).or_insert(usize::MAX);
+        self.cache
+            .entry(state)
+            .and_modify(|e| {
+                if *e > value {
+                    *e = value.clone();
+                } else {
+                    r = false;
+                }
+            })
+            .or_insert_with(|| value.clone());
 
-        if *cached_score > score {
-            // (c)
-            *cached_score = score;
-        } else {
-            // (b)
-            return Ok(false);
-        }
-
-        return Ok(true);
+        return Ok(r);
     }
 }
