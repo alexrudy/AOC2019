@@ -1,7 +1,8 @@
+use ansi_term::Colour;
 use anyhow::Error;
 
-use std::cmp;
-use std::collections::{BTreeSet, BinaryHeap};
+use std::collections::BinaryHeap;
+use std::{cmp, collections::HashMap};
 
 use geometry::coord2d::graph;
 use geometry::coord2d::pathfinder;
@@ -11,13 +12,13 @@ use searcher::SearchCandidate;
 use searcher::SearchScore;
 use searcher::SearchState;
 
-use super::map;
+use super::map::{self, Tile, TileMap};
 use super::multi::{MultiSpelunkPath, MultiSpelunkState};
 
 #[derive(Debug)]
-struct MultiGraphs<'m> {
+pub(crate) struct MultiGraphs<'m> {
     map: &'m map::MultiMap,
-    graph: graph::RawGraph,
+    pub(crate) graph: graph::RawGraph,
 }
 
 impl<'m> MultiGraphs<'m> {
@@ -27,6 +28,38 @@ impl<'m> MultiGraphs<'m> {
         let g = map.grapher(map.entrances().iter()).raw();
 
         Self { map, graph: g }
+    }
+
+    pub(crate) fn printer(&self) -> Printer {
+        Printer(&self)
+    }
+}
+
+pub(crate) struct Printer<'m>(&'m MultiGraphs<'m>);
+
+impl<'m> std::fmt::Display for Printer<'m> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let bbox = self.0.map.bbox();
+
+        bbox.printer(f, |f, p| {
+            let element = format!(
+                "{}",
+                match self.0.map.get(*p) {
+                    Some(Tile::Hall) => '.',
+                    Some(Tile::Entrance) => '@',
+                    Some(Tile::Door(c)) => c.to_ascii_uppercase(),
+                    Some(Tile::Key(c)) => c,
+                    None => '#',
+                }
+            );
+
+            if self.0.graph.contains(p) {
+                write!(f, "{}", Colour::Cyan.paint(element))?;
+            } else {
+                write!(f, "{}", element)?;
+            }
+            Ok(())
+        })
     }
 }
 
@@ -90,11 +123,11 @@ impl<'m> MultiGraphSpelunker<'m> {
         location: &Point,
         graph: &graph::RawGraph,
     ) -> Vec<MultiGraphSpelunker<'m>> {
-        let mut candidates = Vec::new();
+        let mut candidates: HashMap<char, MultiGraphSpelunker<'m>> = HashMap::new();
         let mut queue = BinaryHeap::new();
-        let mut seen = BTreeSet::new();
+        let mut seen = HashMap::new();
 
-        seen.insert(location);
+        seen.insert(location, 0);
         queue.push(MGQ(0, *location, pathfinder::Path::new(*location)));
 
         while let Some(MGQ(_, origin, current_path)) = queue.pop() {
@@ -110,22 +143,37 @@ impl<'m> MultiGraphSpelunker<'m> {
                                 &current_path.follow(path).unwrap(),
                                 path.destination(),
                             ) {
-                                candidates.push(c);
+                                if let Some(cand) = candidates.get_mut(key) {
+                                    if cand.distance() > c.distance() {
+                                        seen.insert(destination, c.distance());
+                                        *cand = c;
+                                    }
+                                } else {
+                                    seen.insert(destination, c.distance());
+                                    candidates.insert(*key, c);
+                                }
                             }
                         }
                         Some(map::Tile::Door(ref key)) if !self.path.keyring().contains(key) => {}
-                        _ => {
-                            if seen.insert(destination) {
-                                let new_path = current_path.follow(path).unwrap();
+                        Some(_) => {
+                            let new_path = current_path.follow(path).unwrap();
+                            if seen.get(destination).unwrap_or(&usize::MAX) >= &new_path.distance()
+                            {
+                                seen.insert(destination, new_path.distance());
                                 queue.push(MGQ(new_path.distance(), *destination, new_path));
                             }
                         }
+                        None => {
+                            unreachable!()
+                        }
                     }
                 }
+            } else {
+                unreachable!();
             }
         }
 
-        candidates
+        candidates.into_iter().map(|(_, m)| m).collect()
     }
 
     fn candidates(&self) -> Vec<MultiGraphSpelunker<'m>> {

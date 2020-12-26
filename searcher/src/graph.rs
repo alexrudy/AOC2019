@@ -36,6 +36,10 @@ where
     G: Graphable<Edge = E>,
 {
     pub fn insert(&mut self, edge: (N, E, N)) -> bool {
+        if edge.0 == edge.2 {
+            return false;
+        }
+
         // Left to right
         let wedge: WeightedEdge<E> = edge.1.into();
 

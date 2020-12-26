@@ -250,6 +250,10 @@ impl RawGraph {
         })
     }
 
+    pub fn nodes(&self) -> impl Iterator<Item = &Point> {
+        self.0.nodes()
+    }
+
     pub fn edges(&self, node: &Point) -> impl Iterator<Item = (&Point, &Path)> {
         self.0.edges(*node).map(|(n, g)| (n, &g.path))
     }

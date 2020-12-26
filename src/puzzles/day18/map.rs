@@ -30,6 +30,21 @@ impl Tile {
     }
 }
 
+impl std::fmt::Display for Tile {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Tile::Hall => '.',
+                Tile::Entrance => '@',
+                Tile::Door(c) => c.to_ascii_uppercase(),
+                Tile::Key(c) => *c,
+            }
+        )
+    }
+}
+
 impl TryFrom<char> for Tile {
     type Error = Error;
 
@@ -96,6 +111,16 @@ impl FromStr for Map {
     }
 }
 
+pub(crate) trait TileMap: Sized {
+    fn get(&self, location: Point) -> Option<Tile>;
+
+    fn bbox(&self) -> BoundingBox;
+
+    fn printer(&self) -> Printer<Self> {
+        Printer(&self)
+    }
+}
+
 impl Map {
     fn new(tiles: BTreeMap<Point, Tile>) -> Self {
         let n_keys = tiles.values().filter(|t| t.is_key()).count();
@@ -117,14 +142,51 @@ impl Map {
             .collect()
     }
 
-    pub(crate) fn get(&self, location: Point) -> Option<Tile> {
-        self.tiles.get(&location).copied()
+    pub(crate) fn key_lookup(&self) -> HashMap<char, Point> {
+        self.keys().iter().map(|k| (k.door, k.location)).collect()
     }
 
     pub(crate) fn entrance(&self) -> Option<Point> {
         self.tiles.iter().find_map(|(p, t)| match t {
             Tile::Entrance => Some(*p),
             _ => None,
+        })
+    }
+}
+
+impl TileMap for Map {
+    fn get(&self, location: Point) -> Option<Tile> {
+        self.tiles.get(&location).copied()
+    }
+
+    fn bbox(&self) -> BoundingBox {
+        BoundingBox::from_points(self.tiles.keys())
+    }
+}
+
+pub(crate) struct Printer<'m, M>(&'m M)
+where
+    M: TileMap;
+
+impl<'m, M> std::fmt::Display for Printer<'m, M>
+where
+    M: TileMap,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let bbox = self.0.bbox();
+
+        bbox.printer(f, |f, p| {
+            write!(
+                f,
+                "{}",
+                match self.0.get(*p) {
+                    Some(Tile::Hall) => '.',
+                    Some(Tile::Entrance) => '@',
+                    Some(Tile::Door(c)) => c.to_ascii_uppercase(),
+                    Some(Tile::Key(c)) => c,
+                    None => '#',
+                }
+            )
         })
     }
 }
@@ -162,10 +224,10 @@ impl MultiMap {
     pub(crate) fn new(map: Map) -> Self {
         lazy_static! {
             static ref OFFSETS: [Point; 4] = [
-                (1, 1).into(),
-                (1, -1).into(),
+                (-1, -1).into(),
                 (-1, 1).into(),
-                (-1, -1).into()
+                (1, -1).into(),
+                (1, 1).into(),
             ];
         }
 
@@ -207,11 +269,43 @@ impl MultiMap {
         &self.2
     }
 
-    pub(crate) fn get(&self, location: Point) -> Option<Tile> {
+    pub(crate) fn quadrant(&self, location: Point) -> usize {
+        let Point { x, y } = self.0.entrance().unwrap().offset(location);
+
+        match (x > 0, y > 0) {
+            (true, true) => 1,
+            (true, false) => 2,
+            (false, true) => 3,
+            (false, false) => 4,
+        }
+    }
+
+    pub(crate) fn key_lookup(&self) -> HashMap<char, Point> {
+        self.0.key_lookup()
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn neighbors(&self, location: Point) -> usize {
+        if self.get(location).is_some() {
+            location
+                .adjacent()
+                .filter(|p| self.get(*p).is_some())
+                .count()
+        } else {
+            0
+        }
+    }
+}
+
+impl TileMap for MultiMap {
+    fn get(&self, location: Point) -> Option<Tile> {
         match self.1.get(&location) {
             Some(t) => t.clone(),
             None => self.0.get(location),
         }
+    }
+    fn bbox(&self) -> BoundingBox {
+        BoundingBox::from_points(self.0.tiles.keys())
     }
 }
 
@@ -222,6 +316,7 @@ impl graph::Graphable for MultiMap {
             Some(Tile::Key(_)) => true,
             Some(Tile::Entrance) => true,
             Some(Tile::Hall) => false,
+            // Some(Tile::Hall) => self.neighbors(*point) > 2,
             None => false,
         }
     }

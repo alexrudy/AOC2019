@@ -6,7 +6,7 @@ use searcher::{self, Score, SearchCandidate, SearchScore, SearchState};
 
 use std::cmp::{Eq, PartialEq};
 
-use super::map;
+use super::map::{self, TileMap};
 use super::KeyPath;
 
 #[derive(Debug, Eq, PartialEq, Hash, Clone)]
@@ -25,6 +25,8 @@ pub(crate) struct MultiSpelunkPath {
     /// Order of keys collected
     path: Vec<char>,
 
+    pub(crate) steps: [pathfinder::Path; 4],
+
     /// Current node for each robot.
     pub(crate) locations: [Point; 4],
     /// Total distance traveled.
@@ -38,10 +40,29 @@ impl MultiSpelunkPath {
         Self {
             keys: map::KeyRing::default(),
             path: Vec::new(),
+            steps: [
+                pathfinder::Path::new(origins[0]),
+                pathfinder::Path::new(origins[1]),
+                pathfinder::Path::new(origins[2]),
+                pathfinder::Path::new(origins[3]),
+            ],
             locations: origins,
             distance: 0,
             target_robot: None,
         }
+    }
+
+    pub(crate) fn keys_by_quadrant(&self, map: &map::MultiMap) -> [Vec<char>; 4] {
+        let mut results = [Vec::new(), Vec::new(), Vec::new(), Vec::new()];
+        let lookup = map.key_lookup();
+
+        for key in self.path.iter() {
+            let idx = map.quadrant(*lookup.get(key).unwrap());
+
+            results[idx - 1].push(*key);
+        }
+
+        results
     }
 
     pub(crate) fn found_key(&mut self, key: char) {
@@ -78,6 +99,7 @@ impl MultiSpelunkPath {
         };
 
         path.locations[robot] = *destination;
+        path.steps[robot] = path.steps[robot].follow(gp).unwrap();
         path.distance += gp.distance();
 
         Some(path)
@@ -223,7 +245,7 @@ pub(crate) fn search<'m>(map: &'m map::MultiMap) -> Result<MultiSpelunkPath, Err
 
         let options = {
             let mut o = SearchOptions::default();
-            o.verbose = Some(10_000);
+            o.verbose = None;
             o
         };
 

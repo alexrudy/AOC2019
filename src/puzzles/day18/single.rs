@@ -8,7 +8,7 @@ use geometry::coord2d::pathfinder;
 use geometry::coord2d::Point;
 use searcher::{self, Score, SearchCandidate, SearchHeuristic, SearchScore, SearchState};
 
-use super::map;
+use super::map::{self, TileMap};
 use super::KeyPath;
 
 #[derive(Debug)]
