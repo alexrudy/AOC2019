@@ -1,65 +1,140 @@
-use ansi_term::Colour;
+use std::cell::RefCell;
+use std::collections::HashMap;
+use std::rc::Rc;
+
 use anyhow::Error;
 
-use std::collections::BinaryHeap;
-use std::{cmp, collections::HashMap};
-
 use geometry::coord2d::graph;
+use geometry::coord2d::map::Map;
 use geometry::coord2d::pathfinder;
 use geometry::coord2d::Point;
+use searcher::graph::{GraphPath, Graphable};
 use searcher::Score;
 use searcher::SearchCandidate;
 use searcher::SearchScore;
 use searcher::SearchState;
 
-use super::map::{self, Tile, TileMap};
+use super::map::{self, TileMap};
 use super::multi::{MultiSpelunkPath, MultiSpelunkState};
+
+#[derive(Debug, Clone)]
+struct KeyGraphable<'m> {
+    map: &'m map::MultiMap,
+    base: &'m graph::RawGraph,
+    keys: &'m map::KeyRing,
+    location: Point,
+}
+
+impl<'m> KeyGraphable<'m> {
+    fn new(
+        map: &'m map::MultiMap,
+        base: &'m graph::RawGraph,
+        keys: &'m map::KeyRing,
+        location: Point,
+    ) -> Self {
+        KeyGraphable {
+            map,
+            base,
+            keys,
+            location,
+        }
+    }
+}
+
+impl<'m> Graphable for KeyGraphable<'m> {
+    type Edge = GraphPath<Point, graph::GPath>;
+
+    fn is_node(&self, node: &Point) -> bool {
+        if *node == self.location {
+            return true;
+        }
+        match self.map.get(*node) {
+            Some(map::Tile::Key(_)) => true,
+            Some(map::Tile::Entrance) => true,
+            _ => false,
+        }
+    }
+
+    fn neighbors(&self, node: &Point) -> Vec<(Point, GraphPath<Point, graph::GPath>)> {
+        let here = GraphPath::new(*node);
+        self.base
+            .edges(node)
+            .filter(|(&d, _)| self.is_traversable(d))
+            .map(|(d, p)| {
+                let gp: graph::GPath = p.clone().into();
+                (*d, here.step_one(*d, gp))
+            })
+            .collect()
+    }
+}
+
+impl<'m> Map for KeyGraphable<'m> {
+    fn is_traversable(&self, location: Point) -> bool {
+        match self.map.get(location) {
+            Some(map::Tile::Door(ref c)) if !self.keys.contains(c) => false,
+            Some(_) => true,
+            None => false,
+        }
+    }
+}
+
+impl<'m> graph::Graphable for KeyGraphable<'m> {
+    fn is_node(&self, point: &Point) -> bool {
+        if *point == self.location {
+            return true;
+        }
+        match self.map.get(*point) {
+            Some(map::Tile::Key(_)) => true,
+            Some(map::Tile::Entrance) => true,
+            _ => false,
+        }
+    }
+}
+
+type MultiGraph = graph::RawGraph;
 
 #[derive(Debug)]
 pub(crate) struct MultiGraphs<'m> {
     map: &'m map::MultiMap,
-    pub(crate) graph: graph::RawGraph,
+    pub(crate) basegraph: graph::RawGraph,
+    graphs: RefCell<HashMap<map::KeyRing, Rc<MultiGraph>>>,
 }
 
 impl<'m> MultiGraphs<'m> {
+    pub(crate) fn graph(&'m self, keys: &map::KeyRing, origin: Point) -> Rc<MultiGraph> {
+        {
+            let cache = self.graphs.borrow();
+            if let Some(g) = cache.get(keys) {
+                return g.clone();
+            }
+        }
+
+        {
+            use geometry::coord2d::graph::Graphable;
+
+            let kg = KeyGraphable::new(self.map, &self.basegraph, keys, origin);
+
+            let rg = kg.grapher(self.map.entrances().iter()).raw();
+            let mut gs = self.graphs.borrow_mut();
+            gs.insert(keys.clone(), Rc::new(rg));
+            if gs.len() % 100 == 0 {
+                eprintln!("G{}", gs.len());
+            }
+        }
+
+        self.graph(keys, origin)
+    }
+
     pub(crate) fn new(map: &'m map::MultiMap) -> Self {
         use geometry::coord2d::graph::Graphable;
 
         let g = map.grapher(map.entrances().iter()).raw();
 
-        Self { map, graph: g }
-    }
-
-    pub(crate) fn printer(&self) -> Printer {
-        Printer(&self)
-    }
-}
-
-pub(crate) struct Printer<'m>(&'m MultiGraphs<'m>);
-
-impl<'m> std::fmt::Display for Printer<'m> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let bbox = self.0.map.bbox();
-
-        bbox.printer(f, |f, p| {
-            let element = format!(
-                "{}",
-                match self.0.map.get(*p) {
-                    Some(Tile::Hall) => '.',
-                    Some(Tile::Entrance) => '@',
-                    Some(Tile::Door(c)) => c.to_ascii_uppercase(),
-                    Some(Tile::Key(c)) => c,
-                    None => '#',
-                }
-            );
-
-            if self.0.graph.contains(p) {
-                write!(f, "{}", Colour::Cyan.paint(element))?;
-            } else {
-                write!(f, "{}", element)?;
-            }
-            Ok(())
-        })
+        Self {
+            map,
+            basegraph: g,
+            graphs: RefCell::new(HashMap::new()),
+        }
     }
 }
 
@@ -69,28 +144,6 @@ struct MultiGraphSpelunker<'m> {
     path: MultiSpelunkPath,
     graphs: &'m MultiGraphs<'m>,
 }
-
-struct MGQ(usize, Point, pathfinder::Path);
-
-impl cmp::Ord for MGQ {
-    fn cmp(&self, other: &Self) -> cmp::Ordering {
-        self.0.cmp(&other.0).reverse()
-    }
-}
-
-impl cmp::PartialOrd for MGQ {
-    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl cmp::PartialEq for MGQ {
-    fn eq(&self, other: &Self) -> bool {
-        self.0.eq(&other.0)
-    }
-}
-
-impl cmp::Eq for MGQ {}
 
 impl<'m> MultiGraphSpelunker<'m> {
     fn new(map: &'m map::MultiMap, graphs: &'m MultiGraphs<'m>, origins: [Point; 4]) -> Self {
@@ -108,13 +161,11 @@ impl<'m> MultiGraphSpelunker<'m> {
         path: &pathfinder::Path,
         destination: &Point,
     ) -> Option<Self> {
-        self.path
-            .path_to(robot, tile, path, destination)
-            .map(|p| Self {
-                map: self.map,
-                path: p,
-                graphs: self.graphs,
-            })
+        self.path.path_to(robot, tile, path, destination).map(|p| {
+            let mut s = self.clone();
+            s.path = p;
+            s
+        })
     }
 
     fn candidates_for_robot(
@@ -125,9 +176,11 @@ impl<'m> MultiGraphSpelunker<'m> {
     ) -> Vec<MultiGraphSpelunker<'m>> {
         let mut candidates = Vec::new();
 
-        for (point, path) in graph.edges(location) {
-            if let Some(c) = self.travel_to(robot, self.map.get(*point), path, point) {
-                candidates.push(c);
+        if graph.contains(location) {
+            for (point, path) in graph.edges(location) {
+                if let Some(c) = self.travel_to(robot, self.map.get(*point), path, point) {
+                    candidates.push(c);
+                }
             }
         }
 
@@ -138,14 +191,22 @@ impl<'m> MultiGraphSpelunker<'m> {
         let mut candidates = Vec::new();
 
         if let Some(i) = self.path.target_robot {
-            candidates.extend(self.candidates_for_robot(
-                i,
-                &self.path.locations[i],
-                &self.graphs.graph,
-            ))
+            candidates.extend(
+                self.candidates_for_robot(
+                    i,
+                    &self.path.locations[i],
+                    &self
+                        .graphs
+                        .graph(self.path.keyring(), self.path.locations[i]),
+                ),
+            )
         } else {
             for (i, location) in self.path.locations.iter().enumerate() {
-                candidates.extend(self.candidates_for_robot(i, location, &self.graphs.graph));
+                candidates.extend(self.candidates_for_robot(
+                    i,
+                    location,
+                    &self.graphs.graph(self.path.keyring(), *location),
+                ));
             }
         }
 
@@ -182,7 +243,6 @@ impl<'m> SearchState for MultiGraphSpelunker<'m> {
     }
 }
 
-#[allow(dead_code)]
 pub(crate) fn search<'m>(map: &'m map::MultiMap) -> Result<MultiSpelunkPath, Error> {
     use searcher::SearchOptions;
 

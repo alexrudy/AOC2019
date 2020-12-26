@@ -71,9 +71,9 @@ pub fn debug_method(input: Box<dyn Read + 'static>) -> ::std::result::Result<(),
 
     let graphs = MultiGraphs::new(&mm);
 
-    for node in graphs.graph.nodes() {
+    for node in graphs.basegraph.nodes() {
         if mm.quadrant(*node) == 3 {
-            for (_, p) in graphs.graph.edges(node) {
+            for (_, p) in graphs.basegraph.edges(node) {
                 let start = mm.get(*p.origin()).unwrap();
                 let finish = mm.get(*p.destination()).unwrap();
                 eprintln!(
@@ -91,7 +91,7 @@ pub fn debug_method(input: Box<dyn Read + 'static>) -> ::std::result::Result<(),
         println!("{}: q{}", i, q);
     }
 
-    print!("{}", graphs.printer());
+    // print!("{}", graphs.printer());
 
     let mmg = mm.clone();
     let tmg = thread::spawn(move || sg(mmg));
