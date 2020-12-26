@@ -184,7 +184,7 @@ pub(crate) fn search<'m>(map: &'m map::Map) -> Result<SpelunkPath, Error> {
 
     let options = {
         let mut o = SearchOptions::default();
-        o.verbose = Some(10_000);
+        o.verbose = None;
         o
     };
 
